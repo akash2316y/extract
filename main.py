@@ -16,7 +16,7 @@ api_hash = getenv("HASH")
 api_id = getenv("ID")
 bot = Client("mybot", api_id=api_id, api_hash=api_hash, bot_token=bot_token)
 
-ss = getenv("STRING")
+ss = getenv("BQA-i3IAS58sEgTMxhQFApjPrEptROwrXsF5q_waCSImxr56iUyF0cHj9fPecdMuK9w7TDONF8066dKmgE3Ap4j6uAArMnjJkJgSp-GnNUxGfQZR7903_rcF417hQLN1WtE2Vf1M4yOx_IXmellNyPb_3ehzl--FURjpAuSrn7_hH7Xm_x1Gz2yq2dyN3CyKhuWX3HFloRvtYKtpfg15Eov0PLK_YoHC6okZGCUJXy-HoIM86jJK_nOA0ATO0liZE3Mgfa7KdXI7B3Vg3mhn3XydenrvcHSOz625C-B2aDTcfJZaVdqasa0kw9lz6yuU37PUYKq8AffCiMTGu2lESaj9kiq9fQAAAAGv6ON-AA")
 if ss is not None:
 	acc = Client("myacc" ,api_id=api_id, api_hash=api_hash, session_string=ss)
 	acc.start()
