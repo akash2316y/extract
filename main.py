@@ -1,223 +1,300 @@
-import os
-import json
-import time
-import threading
-
-from flask import Flask
+import pyrogram
 from pyrogram import Client, filters
 from pyrogram.errors import UserAlreadyParticipant, InviteHashExpired, UsernameNotOccupied
 from pyrogram.types import InlineKeyboardMarkup, InlineKeyboardButton
 
-# Load config
-with open('config.json', 'r') as f:
-    DATA = json.load(f)
+import time
+import os
+import threading
+import json
 
+with open('config.json', 'r') as f: DATA = json.load(f)
 def getenv(var): return os.environ.get(var) or DATA.get(var, None)
 
-# Bot config
+bot_token = getenv("TOKEN") 
+api_hash = getenv("HASH") 
 api_id = getenv("ID")
-api_hash = getenv("HASH")
-bot_token = getenv("TOKEN")
-string_session = getenv("STRING")
-force_channel = getenv("FORCE_CHANNEL")  # e.g., "@yourchannel"
-
-# Global storage for cancel command
-active_tasks = {}
-
-# Bot clients
 bot = Client("mybot", api_id=api_id, api_hash=api_hash, bot_token=bot_token)
-acc = Client("myacc", api_id=api_id, api_hash=api_hash, session_string=string_session) if string_session else None
-if acc: acc.start()
 
-# Usage text
-USAGE = """
-**FOR PUBLIC CHATS**
-Send the post link.
+ss = getenv("STRING")
+if ss is not None:
+	acc = Client("myacc" ,api_id=api_id, api_hash=api_hash, session_string=ss)
+	acc.start()
+else: acc = None
+
+# download status
+def downstatus(statusfile,message):
+	while True:
+		if os.path.exists(statusfile):
+			break
+
+	time.sleep(3)      
+	while os.path.exists(statusfile):
+		with open(statusfile,"r") as downread:
+			txt = downread.read()
+		try:
+			bot.edit_message_text(message.chat.id, message.id, f"__Downloaded__ : **{txt}**")
+			time.sleep(10)
+		except:
+			time.sleep(5)
+
+
+# upload status
+def upstatus(statusfile,message):
+	while True:
+		if os.path.exists(statusfile):
+			break
+
+	time.sleep(3)      
+	while os.path.exists(statusfile):
+		with open(statusfile,"r") as upread:
+			txt = upread.read()
+		try:
+			bot.edit_message_text(message.chat.id, message.id, f"__Uploaded__ : **{txt}**")
+			time.sleep(10)
+		except:
+			time.sleep(5)
+
+
+# progress writter
+def progress(current, total, message, type):
+	with open(f'{message.id}{type}status.txt',"w") as fileup:
+		fileup.write(f"{current * 100 / total:.1f}%")
+
+
+# start command
+@bot.on_message(filters.command(["start"]))
+def send_start(client: pyrogram.client.Client, message: pyrogram.types.messages_and_media.message.Message):
+	bot.send_message(message.chat.id, f"__👋 Hi **{message.from_user.mention}**, I am Save Restricted Bot, I can send you restricted content by it's post link__\n\n{USAGE}",
+	reply_markup=InlineKeyboardMarkup([[ InlineKeyboardButton("🌐 Source Code", url="https://github.com/bipinkrish/Save-Restricted-Bot")]]), reply_to_message_id=message.id)
+
+
+@bot.on_message(filters.text)
+def save(client: pyrogram.client.Client, message: pyrogram.types.messages_and_media.message.Message):
+	print(message.text)
+
+	# joining chats
+	if "https://t.me/+" in message.text or "https://t.me/joinchat/" in message.text:
+
+		if acc is None:
+			bot.send_message(message.chat.id,f"**String Session is not Set**", reply_to_message_id=message.id)
+			return
+
+		try:
+			try: acc.join_chat(message.text)
+			except Exception as e: 
+				bot.send_message(message.chat.id,f"**Error** : __{e}__", reply_to_message_id=message.id)
+				return
+			bot.send_message(message.chat.id,"**Chat Joined**", reply_to_message_id=message.id)
+		except UserAlreadyParticipant:
+			bot.send_message(message.chat.id,"**Chat alredy Joined**", reply_to_message_id=message.id)
+		except InviteHashExpired:
+			bot.send_message(message.chat.id,"**Invalid Link**", reply_to_message_id=message.id)
+
+	# getting message
+	elif "https://t.me/" in message.text:
+
+		datas = message.text.split("/")
+		temp = datas[-1].replace("?single","").split("-")
+		fromID = int(temp[0].strip())
+		try: toID = int(temp[1].strip())
+		except: toID = fromID
+
+		for msgid in range(fromID, toID+1):
+
+			# private
+			if "https://t.me/c/" in message.text:
+				chatid = int("-100" + datas[4])
+				
+				if acc is None:
+					bot.send_message(message.chat.id,f"**String Session is not Set**", reply_to_message_id=message.id)
+					return
+				
+				handle_private(message,chatid,msgid)
+				# try: handle_private(message,chatid,msgid)
+				# except Exception as e: bot.send_message(message.chat.id,f"**Error** : __{e}__", reply_to_message_id=message.id)
+			
+			# bot
+			elif "https://t.me/b/" in message.text:
+				username = datas[4]
+				
+				if acc is None:
+					bot.send_message(message.chat.id,f"**String Session is not Set**", reply_to_message_id=message.id)
+					return
+				try: handle_private(message,username,msgid)
+				except Exception as e: bot.send_message(message.chat.id,f"**Error** : __{e}__", reply_to_message_id=message.id)
+
+			# public
+			else:
+				username = datas[3]
+
+				try: msg  = bot.get_messages(username,msgid)
+				except UsernameNotOccupied: 
+					bot.send_message(message.chat.id,f"**The username is not occupied by anyone**", reply_to_message_id=message.id)
+					return
+				try:
+					if '?single' not in message.text:
+						bot.copy_message(message.chat.id, msg.chat.id, msg.id, reply_to_message_id=message.id)
+					else:
+						bot.copy_media_group(message.chat.id, msg.chat.id, msg.id, reply_to_message_id=message.id)
+				except:
+					if acc is None:
+						bot.send_message(message.chat.id,f"**String Session is not Set**", reply_to_message_id=message.id)
+						return
+					try: handle_private(message,username,msgid)
+					except Exception as e: bot.send_message(message.chat.id,f"**Error** : __{e}__", reply_to_message_id=message.id)
+
+			# wait time
+			time.sleep(3)
+
+
+# handle private
+def handle_private(message: pyrogram.types.messages_and_media.message.Message, chatid: int, msgid: int):
+		msg: pyrogram.types.messages_and_media.message.Message = acc.get_messages(chatid,msgid)
+		msg_type = get_message_type(msg)
+
+		if "Text" == msg_type:
+			bot.send_message(message.chat.id, msg.text, entities=msg.entities, reply_to_message_id=message.id)
+			return
+
+		smsg = bot.send_message(message.chat.id, '__Downloading__', reply_to_message_id=message.id)
+		dosta = threading.Thread(target=lambda:downstatus(f'{message.id}downstatus.txt',smsg),daemon=True)
+		dosta.start()
+		file = acc.download_media(msg, progress=progress, progress_args=[message,"down"])
+		os.remove(f'{message.id}downstatus.txt')
+
+		upsta = threading.Thread(target=lambda:upstatus(f'{message.id}upstatus.txt',smsg),daemon=True)
+		upsta.start()
+		
+		if "Document" == msg_type:
+			try:
+				thumb = acc.download_media(msg.document.thumbs[0].file_id)
+			except: thumb = None
+			
+			bot.send_document(message.chat.id, file, thumb=thumb, caption=msg.caption, caption_entities=msg.caption_entities, reply_to_message_id=message.id, progress=progress, progress_args=[message,"up"])
+			if thumb != None: os.remove(thumb)
+
+		elif "Video" == msg_type:
+			try: 
+				thumb = acc.download_media(msg.video.thumbs[0].file_id)
+			except: thumb = None
+
+			bot.send_video(message.chat.id, file, duration=msg.video.duration, width=msg.video.width, height=msg.video.height, thumb=thumb, caption=msg.caption, caption_entities=msg.caption_entities, reply_to_message_id=message.id, progress=progress, progress_args=[message,"up"])
+			if thumb != None: os.remove(thumb)
+
+		elif "Animation" == msg_type:
+			bot.send_animation(message.chat.id, file, reply_to_message_id=message.id)
+			   
+		elif "Sticker" == msg_type:
+			bot.send_sticker(message.chat.id, file, reply_to_message_id=message.id)
+
+		elif "Voice" == msg_type:
+			bot.send_voice(message.chat.id, file, caption=msg.caption, thumb=thumb, caption_entities=msg.caption_entities, reply_to_message_id=message.id, progress=progress, progress_args=[message,"up"])
+
+		elif "Audio" == msg_type:
+			try:
+				thumb = acc.download_media(msg.audio.thumbs[0].file_id)
+			except: thumb = None
+				
+			bot.send_audio(message.chat.id, file, caption=msg.caption, caption_entities=msg.caption_entities, reply_to_message_id=message.id, progress=progress, progress_args=[message,"up"])   
+			if thumb != None: os.remove(thumb)
+
+		elif "Photo" == msg_type:
+			bot.send_photo(message.chat.id, file, caption=msg.caption, caption_entities=msg.caption_entities, reply_to_message_id=message.id)
+
+		os.remove(file)
+		if os.path.exists(f'{message.id}upstatus.txt'): os.remove(f'{message.id}upstatus.txt')
+		bot.delete_messages(message.chat.id,[smsg.id])
+
+
+# get the type of message
+def get_message_type(msg: pyrogram.types.messages_and_media.message.Message):
+	try:
+		msg.document.file_id
+		return "Document"
+	except: pass
+
+	try:
+		msg.video.file_id
+		return "Video"
+	except: pass
+
+	try:
+		msg.animation.file_id
+		return "Animation"
+	except: pass
+
+	try:
+		msg.sticker.file_id
+		return "Sticker"
+	except: pass
+
+	try:
+		msg.voice.file_id
+		return "Voice"
+	except: pass
+
+	try:
+		msg.audio.file_id
+		return "Audio"
+	except: pass
+
+	try:
+		msg.photo.file_id
+		return "Photo"
+	except: pass
+
+	try:
+		msg.text
+		return "Text"
+	except: pass
+
+
+USAGE = """**FOR PUBLIC CHATS**
+
+__just send post/s link__
 
 **FOR PRIVATE CHATS**
-Send the invite link (only needed if account isn't already in chat), then the post link.
+
+__first send invite link of the chat (unnecessary if the account of string session already member of the chat)
+then send post/s link__
 
 **FOR BOT CHATS**
-Use this format: `https://t.me/b/botusername/1234`
 
-**MULTIPLE POSTS**
-Use `from-to` format:
-`https://t.me/xxxx/1001-1010`
-`https://t.me/c/xxxx/101 - 120`
+__send link with '/b/', bot's username and message id, you might want to install some unofficial client to get the id like below__
+
+```
+https://t.me/b/botusername/4321
+```
+
+**MULTI POSTS**
+
+__send public/private posts link as explained above with formate "from - to" to send multiple messages like below__
+
+```
+https://t.me/xxxx/1001-1010
+
+https://t.me/c/xxxx/101 - 120
+```
+
+__note that space in between doesn't matter__
 """
 
-# Flask app for uptime
-app = Flask(__name__)
-@app.route('/')
-def home(): return "Bot is running 24/7!"
 
-def run_flask(): app.run(host="0.0.0.0", port=8080)
+from flask import Flask
+import threading
 
-# Force subscription check
-def check_subscription(user_id):
-    try:
-        member = bot.get_chat_member(force_channel, user_id)
-        return member.status in ["member", "administrator", "creator"]
-    except: return False
+app_flask = Flask(__name__)
 
-# Cancel command
-@bot.on_message(filters.command("cancel"))
-def cancel_upload(_, message):
-    user_id = message.from_user.id
-    if user_id in active_tasks:
-        active_tasks[user_id] = "cancel"
-        message.reply_text("🚫 Task cancelled.")
-    else:
-        message.reply_text("❌ No active task found.")
+@app_flask.route('/')
+def home():
+    return "Bot is Running 24/7!"
 
-# Start command
-@bot.on_message(filters.command("start"))
-def start(_, message):
-    user_id = message.from_user.id
-    if force_channel and not check_subscription(user_id):
-        join_button = InlineKeyboardMarkup([[InlineKeyboardButton("🔔 Join Channel", url=f"https://t.me/{force_channel.lstrip('@')}")]])
-        return message.reply_text("🚫 Join our channel first to use this bot.", reply_markup=join_button)
+def run_flask():
+    app_flask.run(host="0.0.0.0", port=8080)
 
-    message.reply_text(f"👋 Hi {message.from_user.mention}, I can fetch restricted Telegram posts.\n\n{USAGE}",
-        reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🌐 Source Code", url="https://github.com/bipinkrish/Save-Restricted-Bot")]]))
-
-# Progress tracking
-def progress(current, total, message, type):
-    with open(f"{message.id}{type}.txt", "w") as f:
-        f.write(f"{current * 100 / total:.1f}%")
-
-# Download/Upload status
-def track_status(statusfile, message, prefix):
-    while not os.path.exists(statusfile): time.sleep(1)
-    while os.path.exists(statusfile):
-        try:
-            with open(statusfile) as f:
-                pct = f.read()
-            bot.edit_message_text(message.chat.id, message.id, f"{prefix} : **{pct}**")
-            time.sleep(5)
-        except: time.sleep(2)
-
-# Handle text messages
-@bot.on_message(filters.text)
-def process_text(_, message):
-    user_id = message.from_user.id
-
-    if force_channel and not check_subscription(user_id):
-        join_button = InlineKeyboardMarkup([[InlineKeyboardButton("🔔 Join Channel", url=f"https://t.me/{force_channel.lstrip('@')}")]])
-        return message.reply_text("🚫 Join our channel first to use this bot.", reply_markup=join_button)
-
-    text = message.text.strip()
-
-    # Chat invite
-    if "https://t.me/+" in text or "joinchat" in text:
-        if not acc: return message.reply_text("⚠️ String session not set.")
-        try:
-            acc.join_chat(text)
-            return message.reply_text("✅ Chat Joined.")
-        except UserAlreadyParticipant:
-            return message.reply_text("✅ Already a member.")
-        except InviteHashExpired:
-            return message.reply_text("❌ Invalid invite link.")
-        except Exception as e:
-            return message.reply_text(f"❌ Error: {e}")
-
-    # Message links
-    if "https://t.me/" in text:
-        parts = text.split("/")
-        last = parts[-1].replace("?single", "")
-        try:
-            ids = list(map(int, last.split("-")))
-        except: return message.reply_text("❌ Invalid message ID range.")
-
-        start_id = ids[0]
-        end_id = ids[-1]
-
-        for msg_id in range(start_id, end_id + 1):
-            if "t.me/c/" in text:
-                chat_id = int("-100" + parts[4])
-            elif "t.me/b/" in text:
-                chat_id = parts[4]
-            else:
-                chat_id = parts[3]
-
-            if acc is None:
-                return message.reply_text("⚠️ String session not set.")
-
-            active_tasks[user_id] = "running"
-            try:
-                send_restricted(message, chat_id, msg_id, user_id)
-            except Exception as e:
-                message.reply_text(f"❌ Error: {e}")
-            finally:
-                active_tasks.pop(user_id, None)
-
-            time.sleep(2)
-
-# Send restricted messages
-def send_restricted(message, chat_id, msg_id, user_id):
-    msg = acc.get_messages(chat_id, msg_id)
-    mtype = get_msg_type(msg)
-
-    if active_tasks.get(user_id) == "cancel":
-        return
-
-    if mtype == "Text":
-        return bot.send_message(message.chat.id, msg.text, reply_to_message_id=message.id)
-
-    status_msg = bot.send_message(message.chat.id, "__Downloading__", reply_to_message_id=message.id)
-
-    d_thread = threading.Thread(target=track_status, args=(f"{message.id}down.txt", status_msg, "📥 Downloaded"), daemon=True)
-    d_thread.start()
-
-    file = acc.download_media(msg, progress=progress, progress_args=(message, "down"))
-    os.remove(f"{message.id}down.txt")
-
-    u_thread = threading.Thread(target=track_status, args=(f"{message.id}up.txt", status_msg, "📤 Uploaded"), daemon=True)
-    u_thread.start()
-
-    kwargs = {
-        "caption": msg.caption,
-        "caption_entities": msg.caption_entities,
-        "reply_to_message_id": message.id,
-        "progress": progress,
-        "progress_args": (message, "up"),
-    }
-
-    thumb = None
-    try:
-        if mtype in ["Document", "Audio", "Video"]:
-            thumb = acc.download_media(getattr(msg, mtype.lower()).thumbs[0].file_id)
-            kwargs["thumb"] = thumb
-    except: pass
-
-    if mtype == "Document":
-        bot.send_document(message.chat.id, file, **kwargs)
-    elif mtype == "Video":
-        bot.send_video(message.chat.id, file, duration=msg.video.duration, width=msg.video.width, height=msg.video.height, **kwargs)
-    elif mtype == "Audio":
-        bot.send_audio(message.chat.id, file, **kwargs)
-    elif mtype == "Voice":
-        bot.send_voice(message.chat.id, file, **kwargs)
-    elif mtype == "Photo":
-        bot.send_photo(message.chat.id, file, **kwargs)
-    elif mtype == "Animation":
-        bot.send_animation(message.chat.id, file, **kwargs)
-    elif mtype == "Sticker":
-        bot.send_sticker(message.chat.id, file, reply_to_message_id=message.id)
-
-    if thumb: os.remove(thumb)
-    os.remove(file)
-    if os.path.exists(f"{message.id}up.txt"): os.remove(f"{message.id}up.txt")
-    bot.delete_messages(message.chat.id, [status_msg.id])
-
-# Determine message type
-def get_msg_type(msg):
-    for attr in ["document", "video", "animation", "sticker", "voice", "audio", "photo"]:
-        if getattr(msg, attr, None): return attr.capitalize()
-    if msg.text: return "Text"
-    return "Unknown"
-
-# Run everything
 if __name__ == "__main__":
+    # Flask ko alag thread me start karo
     threading.Thread(target=run_flask).start()
     bot.run()
+        
