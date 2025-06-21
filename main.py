@@ -281,5 +281,19 @@ __note that space in between doesn't matter__
 """
 
 
-# infinty polling
-bot.run()
+from flask import Flask
+import threading
+
+app_flask = Flask(__name__)
+
+@app_flask.route('/')
+def home():
+    return "Bot is Running 24/7!"
+
+def run_flask():
+    app_flask.run(host="0.0.0.0", port=8080)
+
+if __name__ == "__main__":
+    # Flask ko alag thread me start karo
+    threading.Thread(target=run_flask).start()
+    bot.run()
