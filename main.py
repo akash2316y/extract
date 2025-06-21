@@ -67,7 +67,7 @@ def progress(current, total, message, type):
 def send_start(client: pyrogram.client.Client, message: pyrogram.types.messages_and_media.message.Message):
 	bot.send_message(
 		message.chat.id,
-		f"__👋 Hi **{message.from_user.mention}**, I am Save Restricted Bot, I can send you restricted content by it's post link__\n\n{USAGE}",
+		f"**›› Hᴇʏ {message.from_user.mention} ×**, I am Save Restricted Bot, I can send you restricted content by it's post link\n\n{USAGE}",
 		reply_markup=InlineKeyboardMarkup([
 			[
 				InlineKeyboardButton("📢 Update Channel", url="https://t.me/UnknownBotz"),
