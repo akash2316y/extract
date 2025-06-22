@@ -18,7 +18,7 @@ def getenv(var):
 bot_token = getenv("TOKEN")
 api_hash = getenv("HASH")
 api_id = getenv("ID")
-FORCE_JOIN_CHANNEL = "kids_coder"  # 👈 Change to your channel username
+FORCE_JOIN_CHANNEL = "UnknownBotz"  # 👈 Change to your channel username
 
 bot = Client("mybot", api_id=api_id, api_hash=api_hash, bot_token=bot_token)
 
