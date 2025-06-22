@@ -114,18 +114,30 @@ def save(client: pyrogram.client.Client, message: pyrogram.types.messages_and_me
 
 		for msgid in range(fromID, toID+1):
 
-			# private
-			if "https://t.me/c/" in message.text:
-				chatid = int("-100" + datas[4])
-				
-				if acc is None:
-					bot.send_message(message.chat.id,f"**String Session is not Set**", reply_to_message_id=message.id)
-					return
-				
-				handle_private(message,chatid,msgid)
-				# try: handle_private(message,chatid,msgid)
-				# except Exception as e: bot.send_message(message.chat.id,f"**Error** : __{e}__", reply_to_message_id=message.id)
-			
+                        # private
+if "https://t.me/c/" in message.text:
+    try:
+        datas = message.text.split("/")
+        chatid = int("-100" + datas[4])
+        msgid = int(datas[5])
+
+        if acc is None:
+            bot.send_message(
+                message.chat.id,
+                "**String Session is not Set**",
+                reply_to_message_id=message.id
+            )
+            return
+
+        handle_private(message, chatid, msgid)
+
+    except Exception as e:
+        bot.send_message(
+            message.chat.id,
+            f"**Error**: __{e}__",
+            reply_to_message_id=message.id
+        )
+	    
 			# bot
 			elif "https://t.me/b/" in message.text:
 				username = datas[4]
