@@ -3,20 +3,27 @@ import os
 from pyrogram.types import InlineKeyboardMarkup, InlineKeyboardButton
 from pyrogram import Client
 from pyrogram.types import Message
-from typing import List, Union
+from typing import List
 from pyrogram.errors import UserNotParticipant
 
 # Load AUTH_CHANNELS from config.json or environment
-with open('config.json', 'r') as f:
-    DATA = json.load(f)
+try:
+    with open('config.json', 'r') as f:
+        DATA = json.load(f)
+except Exception as e:
+    print(f"[ERROR] config.json read failed: {e}")
+    DATA = {}
 
-def getenv(var): return os.environ.get(var) or DATA.get(var)
+def getenv(var):
+    return os.environ.get(var) or DATA.get(var)
 
-AUTH_CHANNELS = getenv("AUTH_CHANNELS") or [-1001234567890]  # Example of numeric channel IDs
+AUTH_CHANNELS = getenv("AUTH_CHANNELS") or [-1002008497819]
 
-# Ensure all entries are integers
-if isinstance(AUTH_CHANNELS, list):
-    AUTH_CHANNELS = [int(ch) for ch in AUTH_CHANNELS]
+# Ensure AUTH_CHANNELS is a list of ints
+if isinstance(AUTH_CHANNELS, str):
+    AUTH_CHANNELS = [int(AUTH_CHANNELS)]
+elif isinstance(AUTH_CHANNELS, list):
+    AUTH_CHANNELS = [int(x) for x in AUTH_CHANNELS]
 
 async def get_fsub(bot: Client, message: Message) -> bool:
     tb = await bot.get_me()
