@@ -7,7 +7,7 @@ import os
 import threading
 import json
 from flask import Flask
-from .fsub import get_fsub  # Make sure fsub.py is in the same directory
+from fsub import get_fsub  # Make sure fsub.py is in the same directory
 
 with open('config.json', 'r') as f:
     DATA = json.load(f)
