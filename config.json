@@ -1,16 +1,13 @@
 import os
 from typing import List
 
-# Properly cast environment variable to boolean
 IS_FSUB = os.environ.get("FSUB", "True").lower() in ["true", "1", "yes"]
 
-# Parse multiple auth channel IDs from a space-separated string
 AUTH_CHANNELS: List[int] = list(map(int, os.environ.get("AUTH_CHANNEL", "-1002008497819").split()))
 
-# Configuration dictionary (this would normally be loaded from a file or used directly)
 CONFIG = {
     "TOKEN": "",  # Your bot token
     "ID": 20715688,  # App ID as integer
-    "HASH": "6fd4f5071acac391de47d8af73803b80",  # API hash
-    "STRING": None  # Session string (or None if not used)
+    "HASH": "6fd4f5071acac391de47d8af73803b80",
+    "STRING": None
 }
