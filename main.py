@@ -1,7 +1,7 @@
 import pyrogram
 from pyrogram import Client, filters
 from pyrogram.errors import UserAlreadyParticipant, InviteHashExpired, UsernameNotOccupied
-from pyrogram.types import InlineKeyboardMarkup, InlineKeyboardButton
+from pyrogram.types import InlineKeyboardMarkup, InlineKeyboardButton, CallbackQuery
 
 import time
 import os
@@ -62,21 +62,20 @@ def progress(current, total, message, type):
 		fileup.write(f"{current * 100 / total:.1f}%")
 
 
-from pyrogram import Client, filters
-from pyrogram.types import InlineKeyboardMarkup, InlineKeyboardButton, CallbackQuery
-
-# /start command
+# Start command
 @bot.on_message(filters.command(["start"]))
 def send_start(client, message):
     bot.send_message(
         message.chat.id,
-        f"""<b><blockquote>›› Hᴇʏ {message.from_user.mention} ×</blockquote></b>\n            𝖲𝗂𝗆𝗉𝗅𝗒 𝖲𝖾𝗇𝖽 𝗆𝖾 𝖠𝗇𝗒 𝖳𝗒𝗉𝖾 𝗈𝖿 𝖱𝖾𝗌𝗍𝗋𝗂𝖼𝗍𝖾𝖽 𝖫𝗂𝗇𝗄
+        f"""<b><blockquote>›› Hᴇʏ {message.from_user.mention} ×</blockquote></b>\n
+𝖲𝗂𝗆𝗉𝗅𝗒 𝖲𝖾𝗇𝖽 𝗆𝖾 𝖠𝗇𝗒 𝖳𝗒𝗉𝖾 𝗈𝖿 𝖱𝖾𝗌𝗍𝗋𝗂𝖼𝗍𝖾𝖽 𝖫𝗂𝗇𝗄
 𝖯𝗈𝗌𝗍 𝖥𝗋𝗈𝗆 𝖯𝗎𝖻𝗅𝗂𝖼 & 𝖯𝗋𝗂𝗏𝖺𝗍𝖾 𝖢𝗁𝖺𝗇𝗇𝖾𝗅 𝗈𝗋 𝖦𝗋𝗈𝗎𝗉‼️""",
         reply_markup=start_buttons(),
-        reply_to_message_id=message.id
+        reply_to_message_id=message.id,
+        parse_mode="html"
     )
 
-# Function to reuse start buttons
+# Reusable buttons for start and back
 def start_buttons():
     return InlineKeyboardMarkup([
         [
@@ -89,10 +88,10 @@ def start_buttons():
         ]
     ])
 
-# Help Callback
+# Help callback
 @bot.on_callback_query(filters.regex("help"))
-def help_callback(client, callback_query: CallbackQuery):
-    callback_query.message.edit_text(
+async def help_callback(client, callback_query: CallbackQuery):
+    await callback_query.message.edit_text(
         "**🔰 Help Menu**\n\nJust send me any post link from a private channel or group, and I will fetch it for you (if accessible).",
         reply_markup=InlineKeyboardMarkup([
             [
@@ -101,11 +100,16 @@ def help_callback(client, callback_query: CallbackQuery):
             ]
         ])
     )
+    await asyncio.sleep(300)  # Wait 5 minutes
+    try:
+        await client.delete_messages(chat_id=callback_query.message.chat.id, message_ids=callback_query.message.id)
+    except:
+        pass
 
-# About Callback
+# About callback
 @bot.on_callback_query(filters.regex("about"))
-def about_callback(client, callback_query: CallbackQuery):
-    callback_query.message.edit_text(
+async def about_callback(client, callback_query: CallbackQuery):
+    await callback_query.message.edit_text(
         "**ℹ️ About This Bot**\n\nMade with ❤️ using Python & Pyrogram to save restricted posts.\n\n🧑‍💻 Developer: @YourUsername",
         reply_markup=InlineKeyboardMarkup([
             [
@@ -114,20 +118,30 @@ def about_callback(client, callback_query: CallbackQuery):
             ]
         ])
     )
+    await asyncio.sleep(300)
+    try:
+        await client.delete_messages(chat_id=callback_query.message.chat.id, message_ids=callback_query.message.id)
+    except:
+        pass
 
-# Back Callback — edit message to show start content again
+# Back callback (edits message to show start again)
 @bot.on_callback_query(filters.regex("back"))
-def back_callback(client, callback_query: CallbackQuery):
-    callback_query.message.edit_text(
-        ff"""<b><blockquote>›› Hᴇʏ {message.from_user.mention} ×</blockquote></b>\n            𝖲𝗂𝗆𝗉𝗅𝗒 𝖲𝖾𝗇𝖽 𝗆𝖾 𝖠𝗇𝗒 𝖳𝗒𝗉𝖾 𝗈𝖿 𝖱𝖾𝗌𝗍𝗋𝗂𝖼𝗍𝖾𝖽 𝖫𝗂𝗇𝗄
+async def back_callback(client, callback_query: CallbackQuery):
+    await callback_query.message.edit_text(
+        f"""<b><blockquote>›› Hᴇʏ {callback_query.from_user.mention} ×</blockquote></b>\n
+𝖲𝗂𝗆𝗉𝗅𝗒 𝖲𝖾𝗇𝖽 𝗆𝖾 𝖠𝗇𝗒 𝖳𝗒𝗉𝖾 𝗈𝖿 𝖱𝖾𝗌𝗍𝗋𝗂𝖼𝗍𝖾𝖽 𝖫𝗂𝗇𝗄
 𝖯𝗈𝗌𝗍 𝖥𝗋𝗈𝗆 𝖯𝗎𝖻𝗅𝗂𝖼 & 𝖯𝗋𝗂𝗏𝖺𝗍𝖾 𝖢𝗁𝖺𝗇𝗇𝖾𝗅 𝗈𝗋 𝖦𝗋𝗈𝗎𝗉‼️""",
-        reply_markup=start_buttons()
+        reply_markup=start_buttons(),
+        parse_mode="html"
     )
 
-# Close message
+# Close callback
 @bot.on_callback_query(filters.regex("close"))
-def close_callback(client, callback_query: CallbackQuery):
-    callback_query.message.delete()
+async def close_callback(client, callback_query: CallbackQuery):
+    try:
+        await callback_query.message.delete()
+    except:
+        pass
 
 
 
