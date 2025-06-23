@@ -72,7 +72,7 @@ def send_start(client, message):
 𝖯𝗈𝗌𝗍 𝖥𝗋𝗈𝗆 𝖯𝗎𝖻𝗅𝗂𝖼 & 𝖯𝗋𝗂𝗏𝖺𝗍𝖾 𝖢𝗁𝖺𝗇𝗇𝖾𝗅 𝗈𝗋 𝖦𝗋𝗈𝗎𝗉‼️""",
         reply_markup=start_buttons(),
         reply_to_message_id=message.id,
-        parse_mode="html"
+        parse_mode="HTML"
     )
 
 # Reusable buttons for start and back
