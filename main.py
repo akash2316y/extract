@@ -1,9 +1,10 @@
 import pyrogram
 import asyncio
 from pyrogram import Client, filters
+from pyrogram.enums import ParseMode
+from pyrogram.errors import MessageNotModified
 from pyrogram.errors import UserAlreadyParticipant, InviteHashExpired, UsernameNotOccupied
 from pyrogram.types import InlineKeyboardMarkup, InlineKeyboardButton, CallbackQuery
-from pyrogram.enums import ParseMode
 import time
 import os
 import threading
@@ -124,13 +125,16 @@ async def about_callback(client, callback_query: CallbackQuery):
 
 @bot.on_callback_query(filters.regex("back"))
 async def back_callback(client, callback_query: CallbackQuery):
-    await callback_query.message.edit_text(
-        f"""<b><blockquote>›› Hᴇʏ {callback_query.from_user.mention} ×</blockquote></b>\n
+    try:
+        await callback_query.message.edit_text(
+            f"""<b><blockquote>›› Hᴇʏ {callback_query.from_user.mention} ×</blockquote></b>\n
 𝖲𝗂𝗆𝗉𝗅𝗒 𝖲𝖾𝗇𝖽 𝗆𝖾 𝖠𝗇𝗒 𝖳𝗒𝗉𝖾 𝗈𝖿 𝖱𝖾𝗌𝗍𝗋𝗂𝖼𝗍𝖾𝖽 𝖫𝗂𝗇𝗄
 𝖯𝗈𝗌𝗍 𝖥𝗋𝗈𝗆 𝖯𝗎𝖻𝗅𝗂𝖼 & 𝖯𝗋𝗂𝗏𝖺𝗍𝖾 𝖢𝗁𝖺𝗇𝗇𝖾𝗅 𝗈𝗋 𝖦𝗋𝗈𝗎𝗉‼️""",
-        reply_markup=start_buttons(),
-        parse_mode="HTML"
-    )
+            reply_markup=start_buttons(),
+            parse_mode=ParseMode.HTML  # or use parse_mode="html"
+        )
+    except MessageNotModified:
+        pass  # Avoid crash if message text is unchanged
 
 @bot.on_callback_query(filters.regex("close"))
 async def close_callback(client, callback_query: CallbackQuery):
