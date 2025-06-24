@@ -131,10 +131,10 @@ async def back_callback(client, callback_query: CallbackQuery):
 𝖲𝗂𝗆𝗉𝗅𝗒 𝖲𝖾𝗇𝖽 𝗆𝖾 𝖠𝗇𝗒 𝖳𝗒𝗉𝖾 𝗈𝖿 𝖱𝖾𝗌𝗍𝗋𝗂𝖼𝗍𝖾𝖽 𝖫𝗂𝗇𝗄
 𝖯𝗈𝗌𝗍 𝖥𝗋𝗈𝗆 𝖯𝗎𝖻𝗅𝗂𝖼 & 𝖯𝗋𝗂𝗏𝖺𝗍𝖾 𝖢𝗁𝖺𝗇𝗇𝖾𝗅 𝗈𝗋 𝖦𝗋𝗈𝗎𝗉‼️""",
             reply_markup=start_buttons(),
-            parse_mode=ParseMode.HTML  # or use parse_mode="html"
+            parse_mode=ParseMode.HTML
         )
     except MessageNotModified:
-        pass  # Avoid crash if message text is unchanged
+        pass
 
 @bot.on_callback_query(filters.regex("close"))
 async def close_callback(client, callback_query: CallbackQuery):
@@ -142,9 +142,6 @@ async def close_callback(client, callback_query: CallbackQuery):
         await callback_query.message.delete()
     except:
         pass
-
-# Remainder of your code (save function, handle_private, get_message_type, etc.)
-# ... (You already have it and it's working — unchanged)
 
 # Flask to keep alive (optional, for Koyeb)
 app_flask = Flask(__name__)
