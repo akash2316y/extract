@@ -1,4 +1,5 @@
 import pyrogram
+import asyncio
 from pyrogram import Client, filters
 from pyrogram.errors import UserAlreadyParticipant, InviteHashExpired, UsernameNotOccupied
 from pyrogram.types import InlineKeyboardMarkup, InlineKeyboardButton, CallbackQuery
@@ -15,6 +16,14 @@ bot_token = getenv("TOKEN")
 api_hash = getenv("HASH") 
 api_id = getenv("ID")
 bot = Client("mybot", api_id=api_id, api_hash=api_hash, bot_token=bot_token)
+
+app = Client(
+    "my_bot",
+    bot_token=BOT_TOKEN,
+    api_id=API_ID,
+    api_hash=API_HASH,
+    parse_mode="HTML"  # ✅ This sets parse mode globally
+)
 
 ss = getenv("STRING")
 if ss is not None:
