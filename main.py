@@ -80,8 +80,8 @@ async def send_start(client, message):
 def start_buttons():
     return InlineKeyboardMarkup([
         [
-            InlineKeyboardButton("𝖴𝗉𝖽𝖺𝗍𝖾", url="https://t.me/UnknownBotz"),
-            InlineKeyboardButton("𝖲𝗎𝗉𝗉𝗈𝗋𝗍", url="https://t.me/UnknownBotzChat")
+            InlineKeyboardButton("𝖴𝗉𝖽𝖺𝗍𝖾", url="https://t.me/UnknowBotz"),
+            InlineKeyboardButton("𝖲𝗎𝗉𝗉𝗈𝗋𝗍", url="https://t.me/UnknowBotzChat")
         ],
         [
             InlineKeyboardButton("𝖧𝖾𝗅𝗉", callback_data="help"),
@@ -90,7 +90,7 @@ def start_buttons():
     ])
 
 
-@Client.on_callback_query(filters.regex("^help$"))
+@Client.on_callback_query(filters.regex("help"))
 async def help_callback(client: Client, callback_query: CallbackQuery):
     help_text = (
         "**SINGLE POST FOR PUBLIC CHANNEL**\n\n"
@@ -133,15 +133,24 @@ async def help_callback(client: Client, callback_query: CallbackQuery):
 
 @bot.on_callback_query(filters.regex("about"))
 async def about_callback(client, callback_query: CallbackQuery):
-    await callback_query.message.edit_text(
-        "○ 𝖢𝗋𝖾𝖺𝗍𝗈𝗋 :<a href='https://t.me/AlwaysToHelpBot'>𝖴𝗇𝗄𝗇𝗈𝗐𝗇</a>\n○ 𝖫𝖺𝗇𝗀𝗎𝖺𝗀𝖾 :<code>𝖯𝗒𝗍𝗁𝗈𝗇</code>\n○ 𝖫𝗂𝖻𝗋𝖺𝗋𝗒 :<a href='https://docs.pyrogram.org/'>𝖯𝗒𝗋𝗈𝗀𝗋𝖺𝗆</a>\n○ 𝖲𝗈𝗎𝗋𝖼𝖾 𝖢𝗈𝖽𝖾 :<a href='https://t.me/+_1Bx_kts2ocxMDE9'>𝖢𝗅𝗂𝖼𝗄 𝗁𝖾𝗋𝖾</a>",
-        reply_markup=InlineKeyboardMarkup([
-            [
-                InlineKeyboardButton("𝖡𝖺𝖼𝗄", callback_data="back"),
-                InlineKeyboardButton("𝖢𝗅𝗈𝗌𝖾", callback_data="close")
-            ]
-        ])
+    new_text = (
+        "○ 𝖢𝗋𝖾𝖺𝗍𝗈𝗋 :<a href='https://t.me/AlwaysToHelpBot'>𝖴𝗇𝗄𝗇𝗈𝗐𝗇</a>\n"
+        "○ 𝖫𝖺𝗇𝗀𝗎𝖺𝗀𝖾 :<code>𝖯𝗒𝗍𝗁𝗈𝗇</code>\n"
+        "○ 𝖫𝗂𝖻𝗋𝖺𝗋𝗒 :<a href='https://docs.pyrogram.org/'>𝖯𝗒𝗋𝗈𝗀𝗋𝖺𝗆</a>\n"
+        "○ 𝖲𝗈𝗎𝗋𝖼𝖾 𝖢𝗈𝖽𝖾 :<a href='https://t.me/+_1Bx_kts2ocxMDE9'>𝖢𝗅𝗂𝖼𝗄 𝗁𝖾𝗋𝖾</a>"
     )
+
+    if callback_query.message.text != new_text:
+        await callback_query.message.edit_text(
+            new_text,
+            reply_markup=InlineKeyboardMarkup([
+                [
+                    InlineKeyboardButton("𝖡𝖺𝖼𝗄", callback_data="back"),
+                    InlineKeyboardButton("𝖢𝗅𝗈𝗌𝖾", callback_data="close")
+                ]
+            ])
+        )
+
     await asyncio.sleep(300)
     try:
         await client.delete_messages(chat_id=callback_query.message.chat.id, message_ids=callback_query.message.id)
