@@ -76,7 +76,7 @@ async def send_start(client, message):
         reply_to_message_id=message.id,
         parse_mode=ParseMode.HTML
     )
-	
+
 def start_buttons():
     return InlineKeyboardMarkup([
         [
@@ -92,7 +92,7 @@ def start_buttons():
 @bot.on_callback_query(filters.regex("help"))
 async def help_callback(client, callback_query: CallbackQuery):
     await callback_query.message.edit_text(
-        "𝖲𝖨𝖭𝖦𝖫𝖤 𝖯𝖮𝖲𝖳 𝖥𝖮𝖱 𝖯𝖴𝖡𝖫𝖨𝖢 𝖢𝖧𝖠𝖭𝖭𝖤𝖫\n\n 𝖩𝗎𝗌𝗍 𝗌𝖾𝗇𝖽 𝗉𝗈𝗌𝗍 𝗅𝗂𝗇𝗄\n\n 𝖲𝖨𝖭𝖦𝖫𝖤 𝖯𝖮𝖲𝖳 𝖥𝖮𝖱 𝖯𝖱𝖨𝖵𝖠𝖳𝖤 𝖢𝖧𝖠𝖭𝖭𝖤𝖫\n\n 𝖥𝗋𝗂𝗌𝗍 𝗌𝖾𝗇𝖽 𝗂𝗇𝗏𝗂𝗍𝖾 𝗅𝗂𝗇𝗄 𝗍𝗁𝖾 𝖼𝗁𝖺𝗇𝗇𝖾𝗅 𝗈𝗋 𝗀𝗋𝗈𝗎𝗉 𝗍𝗁𝖾𝗇 𝗌𝖾𝗇𝖽 𝗉𝗈𝗌𝗍 𝗅𝗂𝗇𝗄\n\n 𝖬𝖴𝖫𝖳𝖨 𝖯𝖮𝖲𝖳𝖲 𝖥𝖮𝖱 𝖯𝖱𝖨𝖵𝖠𝖳𝖤 𝖢𝖧𝖠𝖭𝖭𝖤𝖫\n\n 𝖲𝖾𝗇𝖽 𝗉𝗎𝖻𝗅𝗂𝖼/𝗉𝗋𝗂𝗏𝖺𝗍𝖾 𝗉𝗈𝗌𝗍𝗌 𝗅𝗂𝗇𝗄 𝖺𝗌 𝖾𝗑𝗉𝗅𝖺𝗂𝗇𝖾𝖽 𝖺𝖻𝗈𝗏𝖾 𝗐𝗂𝗍𝗁 𝖿𝗈𝗋𝗆𝖺𝗍𝖾 "𝖿𝗋𝗈𝗆 - 𝗍𝗈" 𝗍𝗈 𝗌𝖾𝗇𝖽 𝗆𝗎𝗅𝗍𝗂𝗉𝗅𝖾 𝗆𝖾𝗌𝗌𝖺𝗀𝖾𝗌 𝗅𝗂𝗄𝖾 𝖻𝖾𝗅𝗈𝗐\n\n https://t.me/xxxx/1001-1010 \n https://t.me/c/xxxx/101 - 120\n𝖭𝗈𝗍𝖾 𝗍𝗁𝖺𝗍 𝗌𝗉𝖺𝖼𝖾 𝗂𝗇 𝖻𝖾𝗍𝗐𝖾𝖾𝗇 𝖽𝗈𝖾𝗌𝗇'𝗍 𝗆𝖺𝗍𝗍𝖾𝗋 ‼️",
+        "𝖲𝖨𝖭𝖦𝖫𝖤 𝖯𝖮𝖲𝖳 𝖥𝖮𝖱 𝖯𝖴𝖡𝖫𝖨𝖢 𝖢𝖧𝖠𝖭𝖭𝖤𝖫\n\n 𝖩𝗎𝗌𝗍 𝗌𝖾𝗇𝖽 𝗉𝗈𝗌𝗍 𝗅𝗂𝗇𝗄\n\n 𝖲𝖨𝖭𝖦𝖫𝖤 𝖯𝖮𝖲𝖳 𝖥𝖮𝖱 𝖯𝖱𝖨𝖵𝖠𝖳𝖤 𝖢𝖧𝖠𝖭𝖭𝖤𝖫\n\n 𝖥𝗋𝗂𝗌𝗍 𝗌𝖾𝗇𝖽 𝗂𝗇𝗏𝗂𝗍𝖾 𝗅𝗂𝗇𝗄 𝗍𝗁𝖾 𝖼𝗁𝖺𝗇𝗇𝖾𝗅 𝗈𝗋 𝗀𝗋𝗈𝗎𝗉 𝗍𝗁𝖾𝗇 𝗌𝖾𝗇𝖽 𝗉𝗈𝗌𝗍 𝗅𝗂𝗇𝗄\n\n 𝖬𝖴𝖫𝖳𝖨 𝖯𝖮𝖲𝖳𝗌 𝖥𝖮𝖱 𝖯𝖱𝖨𝖵𝖠𝖳𝖤 𝖢𝖧𝖠𝖭𝖭𝖤𝖫\n\n 𝖲𝖾𝗇𝖽 𝗉𝗎𝖻𝗅𝗂𝖼/𝗉𝗋𝗂𝗏𝖺𝗍𝖾 𝗉𝗈𝗌𝗍𝗌 𝗅𝗂𝗇𝗄 𝖺𝗌 𝖾𝗑𝗉𝗅𝖺𝗂𝗇𝖾𝖽 𝖺𝖻𝗈𝗏𝖾 𝗐𝗂𝗍𝗁 𝖿𝗈𝗋𝗆𝖺𝗍𝖾 "𝖿𝗋𝗈𝗆 - 𝗍𝗈" 𝗍𝗈 𝗌𝖾𝗇𝖽 𝗆𝗎𝗅𝗍𝗂𝗉𝗅𝖾 𝗆𝖾𝗌𝗌𝖺𝗀𝖾𝗌 𝗅𝗂𝗄𝖾 𝖻𝖾𝗅𝗈𝗐\n\n https://t.me/xxxx/1001-1010 \n https://t.me/c/xxxx/101 - 120\n𝖭𝗈𝗍𝖾 𝗍𝗁𝖺𝗍 𝗌𝗉𝖺𝗈𝖾 𝗂𝗇 𝖻𝖾𝗍𝗐𝖾𝖾𝗇 𝖽𝗈𝖾𝗌𝗇'𝗍 𝗆𝖺𝗍𝗍𝖾𝗋 ‼️",
         reply_markup=InlineKeyboardMarkup([
             [
                 InlineKeyboardButton("𝖡𝖺𝖼𝗄", callback_data="back"),
@@ -102,7 +102,9 @@ async def help_callback(client, callback_query: CallbackQuery):
     )
     await asyncio.sleep(300)
     try:
-        await client.delete_messages(chat_id=callback_query.message.chat.id, message_ids=callback_query.message.id)
+        await client.delete_messages(chat_id=callback_query.message.chat.id, message_ids=[callback_query.message.id])
+        if callback_query.message.reply_to_message:
+            await client.delete_messages(chat_id=callback_query.message.chat.id, message_ids=[callback_query.message.reply_to_message.id])
     except:
         pass
 
@@ -119,7 +121,9 @@ async def about_callback(client, callback_query: CallbackQuery):
     )
     await asyncio.sleep(300)
     try:
-        await client.delete_messages(chat_id=callback_query.message.chat.id, message_ids=callback_query.message.id)
+        await client.delete_messages(chat_id=callback_query.message.chat.id, message_ids=[callback_query.message.id])
+        if callback_query.message.reply_to_message:
+            await client.delete_messages(chat_id=callback_query.message.chat.id, message_ids=[callback_query.message.reply_to_message.id])
     except:
         pass
 
@@ -157,4 +161,3 @@ def run_flask():
 if __name__ == "__main__":
     threading.Thread(target=run_flask).start()
     bot.run()
-	    
