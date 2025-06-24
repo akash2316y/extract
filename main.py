@@ -12,73 +12,70 @@ import json
 from flask import Flask
 
 # Load config
-with open('config.json', 'r') as f: DATA = json.load(f)
-def getenv(var): return os.environ.get(var) or DATA.get(var, None)
+with open('config.json', 'r') as f:
+    DATA = json.load(f)
+
+def getenv(var):
+    return os.environ.get(var) or DATA.get(var, None)
 
 bot_token = getenv("TOKEN") 
 api_hash = getenv("HASH") 
 api_id = getenv("ID")
+
+# Bot client
 bot = Client("mybot", api_id=api_id, api_hash=api_hash, bot_token=bot_token)
 
+# Optional user session
 ss = getenv("STRING")
 if ss is not None:
-	acc = Client("myacc" ,api_id=api_id, api_hash=api_hash, session_string=ss)
-	acc.start()
-else: acc = None
+    acc = Client("myacc", api_id=api_id, api_hash=api_hash, session_string=ss)
+    acc.start()
+else:
+    acc = None
 
-# download status
-def downstatus(statusfile,message):
-	while True:
-		if os.path.exists(statusfile):
-			break
+# Status display
+def downstatus(statusfile, message):
+    while not os.path.exists(statusfile):
+        time.sleep(1)
+    time.sleep(3)
+    while os.path.exists(statusfile):
+        with open(statusfile, "r") as downread:
+            txt = downread.read()
+        try:
+            bot.edit_message_text(message.chat.id, message.id, f"__Downloaded__ : **{txt}**")
+            time.sleep(10)
+        except:
+            time.sleep(5)
 
-	time.sleep(3)      
-	while os.path.exists(statusfile):
-		with open(statusfile,"r") as downread:
-			txt = downread.read()
-		try:
-			bot.edit_message_text(message.chat.id, message.id, f"__Downloaded__ : **{txt}**")
-			time.sleep(10)
-		except:
-			time.sleep(5)
+def upstatus(statusfile, message):
+    while not os.path.exists(statusfile):
+        time.sleep(1)
+    time.sleep(3)
+    while os.path.exists(statusfile):
+        with open(statusfile, "r") as upread:
+            txt = upread.read()
+        try:
+            bot.edit_message_text(message.chat.id, message.id, f"__Uploaded__ : **{txt}**")
+            time.sleep(10)
+        except:
+            time.sleep(5)
 
-
-# upload status
-def upstatus(statusfile,message):
-	while True:
-		if os.path.exists(statusfile):
-			break
-
-	time.sleep(3)      
-	while os.path.exists(statusfile):
-		with open(statusfile,"r") as upread:
-			txt = upread.read()
-		try:
-			bot.edit_message_text(message.chat.id, message.id, f"__Uploaded__ : **{txt}**")
-			time.sleep(10)
-		except:
-			time.sleep(5)
-
-
-# progress writter
 def progress(current, total, message, type):
-	with open(f'{message.id}{type}status.txt',"w") as fileup:
-		fileup.write(f"{current * 100 / total:.1f}%")
-
+    with open(f'{message.id}{type}status.txt', "w") as fileup:
+        fileup.write(f"{current * 100 / total:.1f}%")
 
 # Start command
 @bot.on_message(filters.command(["start"]))
-def send_start(client, message):
-    bot.send_message(
-        message.chat.id,
-        f"""<b><blockquote>›› Hᴇʏ {message.from_user.mention} ×</blockquote></b>\n
-𝖲𝗂𝗆𝗉𝗅𝗒 𝖲𝖾𝗇𝖽 𝗆𝖾 𝖠𝗇𝗒 𝖳𝗒𝗉𝖾 𝗈𝖿 𝖱𝖾𝗌𝗍𝗋𝗂𝖼𝗍𝖾𝖽 𝖫𝗂𝗇𝗄
-𝖯𝗈𝗌𝗍 𝖥𝗋𝗈𝗆 𝖯𝗎𝖻𝗅𝗂𝖼 & 𝖯𝗋𝗂𝗏𝖺𝗍𝖾 𝖢𝗁𝖺𝗇𝗇𝖾𝗅 𝗈𝗋 𝖦𝗋𝗈𝗎𝗉‼️""",
-        reply_markup=start_buttons(),
-        reply_to_message_id=message.id,
-        parse_mode=ParseMode.HTML
+async def send_start(client, message):
+    await message.reply_text(
+        f"""<b>›› Hᴇʏ {message.from_user.mention} ×</b>\n
+🔹 𝖲𝗂𝗆𝗉𝗅𝗒 𝖲𝖾𝗇𝖽 𝗆𝖾 𝖠𝗇𝗒 𝖳𝗒𝗉𝖾 𝗈𝖿 𝖱𝖾𝗌𝗍𝗋𝗂𝖼𝗍𝖾𝖽 𝖫𝗂𝗇𝗄  
+🔹 𝖯𝗈𝗌𝗍 𝖥𝗋𝗈𝗆 𝖯𝗎𝖻𝗅𝗂𝖼 & 𝖯𝗋𝗂𝗏𝖺𝗍𝖾 𝖢𝗁𝖺𝗇𝗇𝖾𝗅 𝗈𝗋 𝖦𝗋𝗈𝗎𝗉‼️""",
+        reply_markup=start_buttons(),  # make sure this function is defined
+        parse_mode=ParseMode.HTML,
+        reply_to_message_id=message.id
     )
-
+    
 def start_buttons():
     return InlineKeyboardMarkup([
         [
@@ -133,10 +130,10 @@ async def back_callback(client, callback_query: CallbackQuery):
 𝖲𝗂𝗆𝗉𝗅𝗒 𝖲𝖾𝗇𝖽 𝗆𝖾 𝖠𝗇𝗒 𝖳𝗒𝗉𝖾 𝗈𝖿 𝖱𝖾𝗌𝗍𝗋𝗂𝖼𝗍𝖾𝖽 𝖫𝗂𝗇𝗄
 𝖯𝗈𝗌𝗍 𝖥𝗋𝗈𝗆 𝖯𝗎𝖻𝗅𝗂𝖼 & 𝖯𝗋𝗂𝗏𝖺𝗍𝖾 𝖢𝗁𝖺𝗇𝗇𝖾𝗅 𝗈𝗋 𝖦𝗋𝗈𝗎𝗉‼️""",
             reply_markup=start_buttons(),
-            parse_mode=ParseMode.HTML  # or use parse_mode="html"
+            parse_mode=ParseMode.HTML
         )
     except MessageNotModified:
-        pass  # Avoid crash if message text is unchanged
+        pass
 
 @bot.on_callback_query(filters.regex("close"))
 async def close_callback(client, callback_query: CallbackQuery):
@@ -144,9 +141,6 @@ async def close_callback(client, callback_query: CallbackQuery):
         await callback_query.message.delete()
     except:
         pass
-
-# Remainder of your code (save function, handle_private, get_message_type, etc.)
-# ... (You already have it and it's working — unchanged)
 
 # Flask to keep alive (optional, for Koyeb)
 app_flask = Flask(__name__)
@@ -162,3 +156,4 @@ def run_flask():
 if __name__ == "__main__":
     threading.Thread(target=run_flask).start()
     bot.run()
+	    
