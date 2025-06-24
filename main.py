@@ -67,15 +67,16 @@ def progress(current, total, message, type):
 # Start command
 @bot.on_message(filters.command(["start"]))
 async def send_start(client, message):
-    await message.reply_text(
-        f"""<b>›› Hᴇʏ {message.from_user.mention} ×</b>\n
-🔹 𝖲𝗂𝗆𝗉𝗅𝗒 𝖲𝖾𝗇𝖽 𝗆𝖾 𝖠𝗇𝗒 𝖳𝗒𝗉𝖾 𝗈𝖿 𝖱𝖾𝗌𝗍𝗋𝗂𝖼𝗍𝖾𝖽 𝖫𝗂𝗇𝗄  
-🔹 𝖯𝗈𝗌𝗍 𝖥𝗋𝗈𝗆 𝖯𝗎𝖻𝗅𝗂𝖼 & 𝖯𝗋𝗂𝗏𝖺𝗍𝖾 𝖢𝗁𝖺𝗇𝗇𝖾𝗅 𝗈𝗋 𝖦𝗋𝗈𝗎𝗉‼️""",
-        reply_markup=start_buttons(),  # make sure this function is defined
-        parse_mode=ParseMode.HTML,
-        reply_to_message_id=message.id
+    await bot.send_message(
+        message.chat.id,
+        f"""<b><i>›› Hᴇʏ {message.from_user.mention} ×</i></b>\n
+𝖲𝗂𝗆𝗉𝗅𝗒 𝖲𝖾𝗇𝖽 𝗆𝖾 𝖠𝗇𝗒 𝖳𝗒𝗉𝖾 𝗈𝖿 𝖱𝖾𝗌𝗍𝗋𝗂𝖼𝗍𝖾𝖽 𝖫𝗂𝗇𝗄  
+𝖯𝗈𝗌𝗍 𝖥𝗋𝗈𝗆 𝖯𝗎𝖻𝗅𝗂𝖼 & 𝖯𝗋𝗂𝗏𝖺𝗍𝖾 𝖢𝗁𝖺𝗇𝗇𝖾𝗅 𝗈𝗋 𝖦𝗋𝗈𝗎𝗉‼️""",
+        reply_markup=start_buttons(),
+        reply_to_message_id=message.id,
+        parse_mode=ParseMode.HTML
     )
-    
+	
 def start_buttons():
     return InlineKeyboardMarkup([
         [
