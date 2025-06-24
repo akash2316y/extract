@@ -19,9 +19,9 @@ bot = Client("mybot", api_id=api_id, api_hash=api_hash, bot_token=bot_token)
 
 app = Client(
     "my_bot",
-    bot_token=BOT_TOKEN,
-    api_id=API_ID,
-    api_hash=API_HASH,
+    bot_token=TOKEN,
+    api_id=ID,
+    api_hash=HASH,
     parse_mode="HTML"  # ✅ This sets parse mode globally
 )
 
