@@ -1,31 +1,27 @@
 import pyrogram
-import asyncio
 from pyrogram import Client, filters
-from pyrogram.enums import ParseMode
-from pyrogram.errors import MessageNotModified
 from pyrogram.errors import UserAlreadyParticipant, InviteHashExpired, UsernameNotOccupied
-from pyrogram.types import InlineKeyboardMarkup, InlineKeyboardButton, CallbackQuery
+from pyrogram.types import InlineKeyboardMarkup, InlineKeyboardButton
 import time
 import os
 import threading
 import json
 from flask import Flask
+from fsub import get_fsub  # Make sure fsub.py is in the same directory
 
-# Load config
 with open('config.json', 'r') as f:
     DATA = json.load(f)
 
 def getenv(var):
     return os.environ.get(var) or DATA.get(var, None)
 
-bot_token = getenv("TOKEN") 
-api_hash = getenv("HASH") 
+bot_token = getenv("TOKEN")
+api_hash = getenv("HASH")
 api_id = getenv("ID")
+IS_FSUB = getenv("FSUB") == "True"
 
-# Bot client
 bot = Client("mybot", api_id=api_id, api_hash=api_hash, bot_token=bot_token)
 
-# Optional user session
 ss = getenv("STRING")
 if ss is not None:
     acc = Client("myacc", api_id=api_id, api_hash=api_hash, session_string=ss)
@@ -33,11 +29,11 @@ if ss is not None:
 else:
     acc = None
 
-# Status display
+# ----------------- STATUS HANDLERS -----------------
+
 def downstatus(statusfile, message):
     while not os.path.exists(statusfile):
-        time.sleep(1)
-    time.sleep(3)
+        time.sleep(3)
     while os.path.exists(statusfile):
         with open(statusfile, "r") as downread:
             txt = downread.read()
@@ -49,8 +45,7 @@ def downstatus(statusfile, message):
 
 def upstatus(statusfile, message):
     while not os.path.exists(statusfile):
-        time.sleep(1)
-    time.sleep(3)
+        time.sleep(3)
     while os.path.exists(statusfile):
         with open(statusfile, "r") as upread:
             txt = upread.read()
@@ -64,106 +59,198 @@ def progress(current, total, message, type):
     with open(f'{message.id}{type}status.txt', "w") as fileup:
         fileup.write(f"{current * 100 / total:.1f}%")
 
-# Start command
+# ----------------- COMMANDS -----------------
+
 @bot.on_message(filters.command(["start"]))
 async def send_start(client, message):
-    await bot.send_message(
+    if IS_FSUB and not await get_fsub(client, message):
+        return
+
+    await client.send_message(
         message.chat.id,
-        f"""<b><i>›› Hᴇʏ {message.from_user.mention} ×</i></b>\n
-𝖲𝗂𝗆𝗉𝗅𝗒 𝖲𝖾𝗇𝖽 𝗆𝖾 𝖠𝗇𝗒 𝖳𝗒𝗉𝖾 𝗈𝖿 𝖱𝖾𝗌𝗍𝗋𝗂𝖼𝗍𝖾𝖽 𝖫𝗂𝗇𝗄  
-𝖯𝗈𝗌𝗍 𝖥𝗋𝗈𝗆 𝖯𝗎𝖻𝗅𝗂𝖼 & 𝖯𝗋𝗂𝗏𝖺𝗍𝖾 𝖢𝗁𝖺𝗇𝗇𝖾𝗅 𝗈𝗋 𝖦𝗋𝗈𝗎𝗉‼️""",
-        reply_markup=start_buttons(),
-        reply_to_message_id=message.id,
-        parse_mode=ParseMode.HTML
-    )
-	
-def start_buttons():
-    return InlineKeyboardMarkup([
-        [
-            InlineKeyboardButton("𝖴𝗉𝖽𝖺𝗍𝖾", url="https://t.me/UnknowBotz"),
-            InlineKeyboardButton("𝖲𝗎𝗉𝗉𝗈𝗋𝗍", url="https://t.me/UnknowBotzChat")
-        ],
-        [
-            InlineKeyboardButton("𝖧𝖾𝗅𝗉", callback_data="help"),
-            InlineKeyboardButton("𝖠𝖻𝗈𝗎𝗍", callback_data="about")
-        ]
-    ])
-
-@Client.on_callback_query(filters.regex("help"))
-async def help_callback(client: Client, callback_query: CallbackQuery):
-    help_text = (
-        "SINGLE POST FOR PUBLIC CHANNEL\n\n"
-        "Just send the post link.\n\n"
-        "SINGLE POST FOR PRIVATE CHANNEL\n\n"
-        "First send the invite link to the channel or group, then send the post link.\n\n"
-        "MULTI POSTS FOR PRIVATE/PUBLIC CHANNEL\n\n"
-        "Send post links in the format from - to to send multiple messages, like:\n\n"
-        "https://t.me/xxxx/1001-1010\n"
-        "https://t.me/c/xxxx/101 - 120\n\n"
-        "Note: Space between the dash doesn’t matter ‼️"
+        f"›› Hᴇʏ {message.from_user.mention} ×,\n\n{USAGE}",
+        reply_markup=InlineKeyboardMarkup([
+            [
+                InlineKeyboardButton("𝖴𝗉𝖽𝖺𝗍𝖾", url="https://t.me/UnknownBotz"),
+                InlineKeyboardButton("𝖲𝗎𝗉𝗉𝗈𝗋𝗍", url="https://t.me/UnknownBotzChat")
+            ]
+        ]),
+        reply_to_message_id=message.id
     )
 
-    reply_markup = InlineKeyboardMarkup([
-                [
-                    InlineKeyboardButton("𝖡𝖺𝖼𝗄", callback_data="back"),
-                    InlineKeyboardButton("𝖢𝗅𝗈𝗌𝖾", callback_data="close")
-                ]
-            ])
-        )
+@bot.on_message(filters.text)
+async def save(client, message):
+    if IS_FSUB and not await get_fsub(client, message):
+        return
 
-    await asyncio.sleep(300)
-    try:
-        await client.delete_messages(chat_id=callback_query.message.chat.id, message_ids=callback_query.message.id)
-    except:
-        pass
+    print(message.text)
 
-@bot.on_callback_query(filters.regex("about"))
-async def about_callback(client, callback_query: CallbackQuery):
-    new_text = (
-        "○ 𝖢𝗋𝖾𝖺𝗍𝗈𝗋 :<a href='https://t.me/AlwaysToHelpBot'>𝖴𝗇𝗄𝗇𝗈𝗐𝗇</a>\n"
-        "○ 𝖫𝖺𝗇𝗀𝗎𝖺𝗀𝖾 :<code>𝖯𝗒𝗍𝗁𝗈𝗇</code>\n"
-        "○ 𝖫𝗂𝖻𝗋𝖺𝗋𝗒 :<a href='https://docs.pyrogram.org/'>𝖯𝗒𝗋𝗈𝗀𝗋𝖺𝗆</a>\n"
-        "○ 𝖲𝗈𝗎𝗋𝖼𝖾 𝖢𝗈𝖽𝖾 :<a href='https://t.me/+_1Bx_kts2ocxMDE9'>𝖢𝗅𝗂𝖼𝗄 𝗁𝖾𝗋𝖾</a>"
-    )
+    if "https://t.me/+" in message.text or "https://t.me/joinchat/" in message.text:
+        if acc is None:
+            await client.send_message(message.chat.id, "**String Session is not Set**", reply_to_message_id=message.id)
+            return
 
-    if callback_query.message.text != new_text:
-        await callback_query.message.edit_text(
-            new_text,
-            reply_markup=InlineKeyboardMarkup([
-                [
-                    InlineKeyboardButton("𝖡𝖺𝖼𝗄", callback_data="back"),
-                    InlineKeyboardButton("𝖢𝗅𝗈𝗌𝖾", callback_data="close")
-                ]
-            ])
-        )
+        try:
+            try:
+                acc.join_chat(message.text)
+            except Exception as e:
+                await client.send_message(message.chat.id, f"**Error** : __{e}__", reply_to_message_id=message.id)
+                return
+            await client.send_message(message.chat.id, "**Chat Joined**", reply_to_message_id=message.id)
+        except UserAlreadyParticipant:
+            await client.send_message(message.chat.id, "**Chat already Joined**", reply_to_message_id=message.id)
+        except InviteHashExpired:
+            await client.send_message(message.chat.id, "**Invalid Link**", reply_to_message_id=message.id)
 
-    await asyncio.sleep(300)
-    try:
-        await client.delete_messages(chat_id=callback_query.message.chat.id, message_ids=callback_query.message.id)
-    except:
-        pass
+    elif "https://t.me/" in message.text:
+        datas = message.text.split("/")
+        temp = datas[-1].replace("?single", "").split("-")
+        fromID = int(temp[0].strip())
+        try:
+            toID = int(temp[1].strip())
+        except:
+            toID = fromID
 
-@bot.on_callback_query(filters.regex("back"))
-async def back_callback(client, callback_query: CallbackQuery):
-    try:
-        await callback_query.message.edit_text(
-            f"""<b><blockquote>›› Hᴇʏ {callback_query.from_user.mention} ×</blockquote></b>\n
-𝖲𝗂𝗆𝗉𝗅𝗒 𝖲𝖾𝗇𝖽 𝗆𝖾 𝖠𝗇𝗒 𝖳𝗒𝗉𝖾 𝗈𝖿 𝖱𝖾𝗌𝗍𝗋𝗂𝖼𝗍𝖾𝖽 𝖫𝗂𝗇𝗄
-𝖯𝗈𝗌𝗍 𝖥𝗋𝗈𝗆 𝖯𝗎𝖻𝗅𝗂𝖼 & 𝖯𝗋𝗂𝗏𝖺𝗍𝖾 𝖢𝗁𝖺𝗇𝗇𝖾𝗅 𝗈𝗋 𝖦𝗋𝗈𝗎𝗉‼️""",
-            reply_markup=start_buttons(),
-            parse_mode=ParseMode.HTML
-        )
-    except MessageNotModified:
-        pass
+        for msgid in range(fromID, toID + 1):
+            if "https://t.me/c/" in message.text:
+                chatid = int("-100" + datas[4])
+                if acc is None:
+                    await client.send_message(message.chat.id, "**String Session is not Set**", reply_to_message_id=message.id)
+                    return
+                handle_private(message, chatid, msgid)
 
-@bot.on_callback_query(filters.regex("close"))
-async def close_callback(client, callback_query: CallbackQuery):
-    try:
-        await callback_query.message.delete()
-    except:
-        pass
+            elif "https://t.me/b/" in message.text:
+                username = datas[4]
+                if acc is None:
+                    await client.send_message(message.chat.id, "**String Session is not Set**", reply_to_message_id=message.id)
+                    return
+                try:
+                    handle_private(message, username, msgid)
+                except Exception as e:
+                    await client.send_message(message.chat.id, f"**Error** : __{e}__", reply_to_message_id=message.id)
+            else:
+                username = datas[3]
+                try:
+                    msg = client.get_messages(username, msgid)
+                except UsernameNotOccupied:
+                    await client.send_message(message.chat.id, "**The username is not occupied by anyone**", reply_to_message_id=message.id)
+                    return
+                try:
+                    if '?single' not in message.text:
+                        await client.copy_message(message.chat.id, msg.chat.id, msg.id, reply_to_message_id=message.id)
+                    else:
+                        await client.copy_media_group(message.chat.id, msg.chat.id, msg.id, reply_to_message_id=message.id)
+                except:
+                    if acc is None:
+                        await client.send_message(message.chat.id, "**String Session is not Set**", reply_to_message_id=message.id)
+                        return
+                    try:
+                        handle_private(message, username, msgid)
+                    except Exception as e:
+                        await client.send_message(message.chat.id, f"**Error** : __{e}__", reply_to_message_id=message.id)
 
-# Flask to keep alive (optional, for Koyeb)
+            time.sleep(3)
+
+# ----------------- PRIVATE HANDLER -----------------
+
+def handle_private(message, chatid, msgid):
+    msg = acc.get_messages(chatid, msgid)
+    msg_type = get_message_type(msg)
+
+    if "Text" == msg_type:
+        bot.send_message(message.chat.id, msg.text, entities=msg.entities, reply_to_message_id=message.id)
+        return
+
+    smsg = bot.send_message(message.chat.id, '__Downloading__', reply_to_message_id=message.id)
+    dosta = threading.Thread(target=lambda: downstatus(f'{message.id}downstatus.txt', smsg), daemon=True)
+    dosta.start()
+    file = acc.download_media(msg, progress=progress, progress_args=[message, "down"])
+    os.remove(f'{message.id}downstatus.txt')
+
+    upsta = threading.Thread(target=lambda: upstatus(f'{message.id}upstatus.txt', smsg), daemon=True)
+    upsta.start()
+
+    if "Document" == msg_type:
+        try:
+            thumb = acc.download_media(msg.document.thumbs[0].file_id)
+        except:
+            thumb = None
+        bot.send_document(message.chat.id, file, thumb=thumb, caption=msg.caption, caption_entities=msg.caption_entities, reply_to_message_id=message.id, progress=progress, progress_args=[message, "up"])
+        if thumb:
+            os.remove(thumb)
+
+    elif "Video" == msg_type:
+        try:
+            thumb = acc.download_media(msg.video.thumbs[0].file_id)
+        except:
+            thumb = None
+        bot.send_video(message.chat.id, file, duration=msg.video.duration, width=msg.video.width, height=msg.video.height, thumb=thumb, caption=msg.caption, caption_entities=msg.caption_entities, reply_to_message_id=message.id, progress=progress, progress_args=[message, "up"])
+        if thumb:
+            os.remove(thumb)
+
+    elif "Animation" == msg_type:
+        bot.send_animation(message.chat.id, file, reply_to_message_id=message.id)
+
+    elif "Sticker" == msg_type:
+        bot.send_sticker(message.chat.id, file, reply_to_message_id=message.id)
+
+    elif "Voice" == msg_type:
+        bot.send_voice(message.chat.id, file, caption=msg.caption, thumb=None, caption_entities=msg.caption_entities, reply_to_message_id=message.id, progress=progress, progress_args=[message, "up"])
+
+    elif "Audio" == msg_type:
+        try:
+            thumb = acc.download_media(msg.audio.thumbs[0].file_id)
+        except:
+            thumb = None
+        bot.send_audio(message.chat.id, file, caption=msg.caption, caption_entities=msg.caption_entities, reply_to_message_id=message.id, progress=progress, progress_args=[message, "up"])
+        if thumb:
+            os.remove(thumb)
+
+    elif "Photo" == msg_type:
+        bot.send_photo(message.chat.id, file, caption=msg.caption, caption_entities=msg.caption_entities, reply_to_message_id=message.id)
+
+    os.remove(file)
+    if os.path.exists(f'{message.id}upstatus.txt'):
+        os.remove(f'{message.id}upstatus.txt')
+    bot.delete_messages(message.chat.id, [smsg.id])
+
+# ----------------- HELPER -----------------
+
+def get_message_type(msg):
+    try: return "Document" if msg.document else None
+    except: pass
+    try: return "Video" if msg.video else None
+    except: pass
+    try: return "Animation" if msg.animation else None
+    except: pass
+    try: return "Sticker" if msg.sticker else None
+    except: pass
+    try: return "Voice" if msg.voice else None
+    except: pass
+    try: return "Audio" if msg.audio else None
+    except: pass
+    try: return "Photo" if msg.photo else None
+    except: pass
+    try: return "Text" if msg.text else None
+    except: pass
+
+
+USAGE =  """**SINGLE POST FOR PUBLIC CHANNEL**
+      Just send the post link.
+
+**SINGLE POST FOR PRIVATE CHANNEL
+    First send the invite link to the channel or group, then send the post link.
+
+**MULTI POSTS FOR PRIVATE/PUBLIC CHANNEL**
+    Send post links in the format `from - to` to send multiple messages, like:
+    `https://t.me/xxxx/101-120`
+    `https://t.me/c/xxxx/101 - 120`
+
+  Note: Space between the dash doesn’t matter ‼️"""
+
+
+# ----------------- FLASK KEEP-ALIVE -----------------
+
 app_flask = Flask(__name__)
 
 @app_flask.route('/')
@@ -173,8 +260,7 @@ def home():
 def run_flask():
     app_flask.run(host="0.0.0.0", port=8080)
 
-# Start
 if __name__ == "__main__":
     threading.Thread(target=run_flask).start()
     bot.run()
-	    
+
