@@ -104,31 +104,18 @@ async def help_callback(client: Client, callback_query: CallbackQuery):
     )
 
     reply_markup = InlineKeyboardMarkup([
-        [
-            InlineKeyboardButton("𝖡𝖺𝖼𝗄", callback_data="back"),
-            InlineKeyboardButton("𝖢𝗅𝗈𝗌𝖾", callback_data="close")
-        ]
-    ])
-
-    if callback_query.message.text != help_text:
-        try:
-            await callback_query.message.edit_text(
-                text=help_text,
-                reply_markup=reply_markup
-            )
-        except Exception as e:
-            print(f"Failed to edit message: {e}")
-            return
+                [
+                    InlineKeyboardButton("𝖡𝖺𝖼𝗄", callback_data="back"),
+                    InlineKeyboardButton("𝖢𝗅𝗈𝗌𝖾", callback_data="close")
+                ]
+            ])
+        )
 
     await asyncio.sleep(300)
     try:
-        await client.delete_messages(
-            chat_id=callback_query.message.chat.id,
-            message_ids=callback_query.message.id
-        )
-    except Exception as e:
-        print(f"Failed to delete message after timeout: {e}")
-
+        await client.delete_messages(chat_id=callback_query.message.chat.id, message_ids=callback_query.message.id)
+    except:
+        pass
 
 @bot.on_callback_query(filters.regex("about"))
 async def about_callback(client, callback_query: CallbackQuery):
