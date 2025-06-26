@@ -257,20 +257,21 @@ def get_message_type(msg: pyrogram.types.messages_and_media.message.Message):
 	except: pass
 
 
-USAGE =  """**SINGLE POST FOR PUBLIC CHANNEL**
-      Just send the post link.
+USAGE =  """
+**SINGLE POST FOR PUBLIC CHANNEL**
+Just send the post link.
 
-**SINGLE POST FOR PRIVATE CHANNEL
-    First send the invite link to the channel or group, then 
-    send the post link.
+**SINGLE POST FOR PRIVATE CHANNEL**
+First send the invite link to the channel or group, then
+send the post link.
 
 **MULTI POSTS FOR PRIVATE/PUBLIC CHANNEL**
-    Send post links in the format `from - to` to send multiple messages, like:
+Send post links in the format `from - to` to send multiple
+messages, like:
+```https://t.me/xxxx/101-120
+    https://t.me/c/xxxx/101 - 120
 ```
-    https://t.me/xxxx/101-120`
-    https://t.me/c/xxxx/101 - 120`
-```
-  Note: Space between the dash doesn’t matter ‼️"""
+**Note: Space between the dash doesn’t matter ‼️**"""
 
 
 from flask import Flask
