@@ -234,18 +234,19 @@ def get_message_type(msg):
     except: pass
 
 
-USAGE =  """**SINGLE POST FOR PUBLIC CHANNEL**
-      Just send the post link.
+USAGE =  """**𝖲𝖨𝖭𝖦𝖫𝖤 𝖯𝖮𝖲𝖳  𝖥𝖮𝖱 𝖯𝖴𝖡𝖫𝖨𝖢 𝖢𝖧𝖠𝖭𝖭𝖤𝖫**
+𝖩𝗎𝗌𝗍 𝗌𝖾𝗇𝖽 𝗉𝗈𝗌𝗍 𝗅𝗂𝗇𝗄...
 
-**SINGLE POST FOR PRIVATE CHANNEL
-    First send the invite link to the channel or group, then send the post link.
+**𝖲𝖨𝖭𝖦𝖫𝖤 𝖯𝖮𝖲𝖳 𝖥𝖮𝖱 𝖯𝖱𝖨𝖵𝖠𝖳𝖤 𝖢𝖧𝖠𝖭𝖭𝖤𝖫**
+𝖥𝗋𝗂𝗌𝗍 𝗌𝖾𝗇𝖽 𝗂𝗇𝗏𝗂𝗍𝖾 𝗅𝗂𝗇𝗄 𝗍𝗁𝖾 𝖼𝗁𝖺𝗇𝗇𝖾𝗅 𝗈𝗋 𝗀𝗋𝗈𝗎𝗉 𝗍𝗁𝖾𝗇 𝗌𝖾𝗇𝖽 𝗉𝗈𝗌𝗍 𝗅𝗂𝗇𝗄
 
-**MULTI POSTS FOR PRIVATE/PUBLIC CHANNEL**
-    Send post links in the format `from - to` to send multiple messages, like:
-    `https://t.me/xxxx/101-120`
-    `https://t.me/c/xxxx/101 - 120`
+**𝖬𝖴𝖫𝖳𝖨 𝖯𝖮𝖲𝖳𝖲 𝖯𝖴𝖡𝖫𝖨𝖢/𝖯𝖱𝖨𝖵𝖠𝖳𝖤 𝖢𝖧𝖠𝖭𝖭𝖤𝖫**
+𝖲𝖾𝗇𝖽 𝗉𝗎𝖻𝗅𝗂𝖼/𝗉𝗋𝗂𝗏𝖺𝗍𝖾 𝗉𝗈𝗌𝗍𝗌 𝗅𝗂𝗇𝗄 𝖺𝗌 𝖾𝗑𝗉𝗅𝖺𝗂𝗇𝖾𝖽 𝖺𝖻𝗈𝗏𝖾 𝗐𝗂𝗍𝗁 𝖿𝗈𝗋𝗆𝖺𝗍𝖾 "𝖿𝗋𝗈𝗆 - 𝗍𝗈" 𝗍𝗈 𝗌𝖾𝗇𝖽 𝗆𝗎𝗅𝗍𝗂𝗉𝗅𝖾 𝗆𝖾𝗌𝗌𝖺𝗀𝖾𝗌 𝗅𝗂𝗄𝖾 𝖻𝖾𝗅𝗈𝗐
+`𝗁𝗍𝗍𝗉𝗌://𝗍.𝗆𝖾/𝗑𝗑𝗑𝗑/1001-1010`
+`𝗁𝗍𝗍𝗉𝗌://𝗍.𝗆𝖾/𝖼/𝗑𝗑𝗑𝗑/101 - 120`
 
-  Note: Space between the dash doesn’t matter ‼️"""
+𝖭𝗈𝗍𝖾 𝗍𝗁𝖺𝗍 𝗌𝗉𝖺𝖼𝖾 𝗂𝗇 𝖻𝖾𝗍𝗐𝖾𝖾𝗇 𝖽𝗈𝖾𝗌𝗇'𝗍 𝗆𝖺𝗍𝗍𝖾𝗋 ‼️"""
+
 
 
 # ----------------- FLASK KEEP-ALIVE -----------------
