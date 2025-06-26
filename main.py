@@ -93,15 +93,15 @@ def start_buttons():
 @Client.on_callback_query(filters.regex("help"))
 async def help_callback(client: Client, callback_query: CallbackQuery):
     help_text = (
-        "**SINGLE POST FOR PUBLIC CHANNEL**\n\n"
+        "SINGLE POST FOR PUBLIC CHANNEL\n\n"
         "Just send the post link.\n\n"
-        "**SINGLE POST FOR PRIVATE CHANNEL**\n\n"
+        "SINGLE POST FOR PRIVATE CHANNEL\n\n"
         "First send the invite link to the channel or group, then send the post link.\n\n"
-        "**MULTI POSTS FOR PRIVATE/PUBLIC CHANNEL**\n\n"
-        "Send post links in the format `from - to` to send multiple messages, like:\n\n"
-        "`https://t.me/xxxx/1001-1010`\n"
-        "`https://t.me/c/xxxx/101 - 120`\n\n"
-        "**Note:** Space between the dash doesn’t matter ‼️"
+        "MULTI POSTS FOR PRIVATE/PUBLIC CHANNEL\n\n"
+        "Send post links in the format from - to to send multiple messages, like:\n\n"
+        "https://t.me/xxxx/1001-1010\n"
+        "https://t.me/c/xxxx/101 - 120\n\n"
+        "Note: Space between the dash doesn’t matter ‼️"
     )
 
     reply_markup = InlineKeyboardMarkup([
@@ -111,16 +111,16 @@ async def help_callback(client: Client, callback_query: CallbackQuery):
         ]
     ])
 
-    try:
-        await callback_query.message.edit_text(
-            text=help_text,
-            reply_markup=reply_markup
-        )
-    except Exception as e:
-        print(f"Failed to edit message: {e}")
-        return
+    if callback_query.message.text != help_text:
+        try:
+            await callback_query.message.edit_text(
+                text=help_text,
+                reply_markup=reply_markup
+            )
+        except Exception as e:
+            print(f"Failed to edit message: {e}")
+            return
 
-    # Delete the message after 5 minutes (optional)
     await asyncio.sleep(300)
     try:
         await client.delete_messages(
