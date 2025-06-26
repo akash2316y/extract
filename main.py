@@ -89,7 +89,6 @@ def start_buttons():
         ]
     ])
 
-
 @Client.on_callback_query(filters.regex("help"))
 async def help_callback(client: Client, callback_query: CallbackQuery):
     help_text = (
@@ -129,7 +128,7 @@ async def help_callback(client: Client, callback_query: CallbackQuery):
         )
     except Exception as e:
         print(f"Failed to delete message after timeout: {e}")
-	    
+
 
 @bot.on_callback_query(filters.regex("about"))
 async def about_callback(client, callback_query: CallbackQuery):
