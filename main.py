@@ -168,7 +168,7 @@ async def handle_private(message: pyrogram.types.messages_and_media.message.Mess
             except:
                 thumb = None
 
-            await bot.send_document(
+            await acc.send_document(
                 message.chat.id, file, thumb=thumb, caption=msg.caption,
                 caption_entities=msg.caption_entities, reply_to_message_id=message.id,
                 progress=progress, progress_args=[message, "up"]
