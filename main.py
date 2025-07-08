@@ -73,27 +73,31 @@ def send_start(client, message):
 	
 
 @bot.on_message(filters.text)
-def save(client: pyrogram.client.Client, message: pyrogram.types.messages_and_media.message.Message):
-	print(message.text)
+async def save(client: pyrogram.client.Client, message: pyrogram.types.messages_and_media.message.Message):
+    print(message.text)
 
-	# joining chats
-	if "https://t.me/+" in message.text or "https://t.me/joinchat/" in message.text:
+    # joining chats
+    if "https://t.me/+" in message.text or "https://t.me/joinchat/" in message.text:
 
-		if acc is None:
-			bot.send_message(message.chat.id,f"**String Session is not Set**", reply_to_message_id=message.id)
-			return
+        if acc is None:
+            await bot.send_message(message.chat.id, "**String Session is not Set**", reply_to_message_id=message.id)
+            return
 
-		try:
-			try: await acc.join_chat(message.text)	
-			except Exception as e: 
-				bot.send_message(message.chat.id,f"**Error** : __{e}__", reply_to_message_id=message.id)
-				return
-			await bot.send_message(message.chat.id, "**Chat Joined**", reply_to_message_id=message.id)
-		except UserAlreadyParticipant:
-			bot.send_message(message.chat.id,"**Chat alredy Joined**", reply_to_message_id=message.id)
-		except InviteHashExpired:
-			bot.send_message(message.chat.id,"**Invalid Link**", reply_to_message_id=message.id)
+        try:
+            try:
+                await acc.join_chat(message.text)    
+            except Exception as e: 
+                await bot.send_message(message.chat.id, f"**Error** : __{e}__", reply_to_message_id=message.id)
+                return
 
+            await bot.send_message(message.chat.id, "**Chat Joined**", reply_to_message_id=message.id)
+
+        except UserAlreadyParticipant:
+            await bot.send_message(message.chat.id, "**Chat already Joined**", reply_to_message_id=message.id)
+
+        except InviteHashExpired:
+            await bot.send_message(message.chat.id, "**Invalid Link**", reply_to_message_id=message.id)
+		
 	# getting message
 	elif "https://t.me/" in message.text:
 
