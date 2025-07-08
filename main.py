@@ -64,131 +64,88 @@ def progress(current, total, message, type):
 
 # start command
 @bot.on_message(filters.command(["start"]))
-async def send_start(client: pyrogram.client.Client, message: pyrogram.types.messages_and_media.message.Message):
-    await bot.send_message(
-        chat_id=message.chat.id,
-        text=f"**›› 𝖧𝗂𝗂 {message.from_user.mention} ×**\n\n{USAGE}",
-        reply_markup=InlineKeyboardMarkup([
-            [
-                InlineKeyboardButton("𝖴𝗉𝖽𝖺𝗍𝖾", url="https://t.me/UnknownBotz"),
-                InlineKeyboardButton("𝖲𝗎𝗉𝗉𝗈𝗋𝗍", url="https://t.me/UnknownBotzChat")
-            ]
-        ]),
-        reply_to_message_id=message.id
-    )
-
+def send_start(client: pyrogram.client.Client, message: pyrogram.types.messages_and_media.message.Message):
+	bot.send_message(message.chat.id, f"__👋 Hi **{message.from_user.mention}**, I am Save Restricted Bot, I can send you restricted content by it's post link__\n\n{USAGE}",
+	reply_markup=InlineKeyboardMarkup([[ InlineKeyboardButton("🌐 Source Code", url="https://github.com/bipinkrish/Save-Restricted-Bot")]]), reply_to_message_id=message.id)
 
 
 @bot.on_message(filters.text)
-async def save(client: pyrogram.client.Client, message: pyrogram.types.messages_and_media.message.Message):
-    print(message.text)
+def save(client: pyrogram.client.Client, message: pyrogram.types.messages_and_media.message.Message):
+	print(message.text)
 
-    # joining chats
-    if "https://t.me/+" in message.text or "https://t.me/joinchat/" in message.text:
+	# joining chats
+	if "https://t.me/+" in message.text or "https://t.me/joinchat/" in message.text:
 
-        if acc is None:
-            await bot.send_message(
-                message.chat.id,
-                "**String Session is not Set**",
-                reply_to_message_id=message.id
-            )
-            return
+		if acc is None:
+			bot.send_message(message.chat.id,f"**String Session is not Set**", reply_to_message_id=message.id)
+			return
 
-        try:
-            try:
-                await acc.join_chat(message.text)
-            except Exception as e:
-                await bot.send_message(
-                    message.chat.id,
-                    f"**Error** : __{e}__",
-                    reply_to_message_id=message.id
-                )
-                return
+		try:
+			try: acc.join_chat(message.text)
+			except Exception as e: 
+				bot.send_message(message.chat.id,f"**Error** : __{e}__", reply_to_message_id=message.id)
+				return
+			bot.send_message(message.chat.id,"**Chat Joined**", reply_to_message_id=message.id)
+		except UserAlreadyParticipant:
+			bot.send_message(message.chat.id,"**Chat alredy Joined**", reply_to_message_id=message.id)
+		except InviteHashExpired:
+			bot.send_message(message.chat.id,"**Invalid Link**", reply_to_message_id=message.id)
 
-            await bot.send_message(
-                message.chat.id,
-                "**Chat Joined**",
-                reply_to_message_id=message.id
-            )
+	# getting message
+	elif "https://t.me/" in message.text:
 
-        except UserAlreadyParticipant:
-            await bot.send_message(
-                message.chat.id,
-                "**Chat already Joined**",
-                reply_to_message_id=message.id
-            )
+		datas = message.text.split("/")
+		temp = datas[-1].replace("?single","").split("-")
+		fromID = int(temp[0].strip())
+		try: toID = int(temp[1].strip())
+		except: toID = fromID
 
-        except InviteHashExpired:
-            await bot.send_message(
-                message.chat.id,
-                "**Invalid Link**",
-                reply_to_message_id=message.id
-            )
+		for msgid in range(fromID, toID+1):
 
-    # getting message
-    elif "https://t.me/" in message.text:
+			# private
+			if "https://t.me/c/" in message.text:
+				chatid = int("-100" + datas[4])
+				
+				if acc is None:
+					bot.send_message(message.chat.id,f"**String Session is not Set**", reply_to_message_id=message.id)
+					return
+				
+				handle_private(message,chatid,msgid)
+				# try: handle_private(message,chatid,msgid)
+				# except Exception as e: bot.send_message(message.chat.id,f"**Error** : __{e}__", reply_to_message_id=message.id)
+			
+			# bot
+			elif "https://t.me/b/" in message.text:
+				username = datas[4]
+				
+				if acc is None:
+					bot.send_message(message.chat.id,f"**String Session is not Set**", reply_to_message_id=message.id)
+					return
+				try: handle_private(message,username,msgid)
+				except Exception as e: bot.send_message(message.chat.id,f"**Error** : __{e}__", reply_to_message_id=message.id)
 
-        datas = message.text.split("/")
-        temp = datas[-1].replace("?single", "").split("-")
-        fromID = int(temp[0].strip())
-        try:
-            toID = int(temp[1].strip())
-        except:
-            toID = fromID
+			# public
+			else:
+				username = datas[3]
 
-        for msgid in range(fromID, toID + 1):
+				try: msg  = bot.get_messages(username,msgid)
+				except UsernameNotOccupied: 
+					bot.send_message(message.chat.id,f"**The username is not occupied by anyone**", reply_to_message_id=message.id)
+					return
+				try:
+					if '?single' not in message.text:
+						bot.copy_message(message.chat.id, msg.chat.id, msg.id, reply_to_message_id=message.id)
+					else:
+						bot.copy_media_group(message.chat.id, msg.chat.id, msg.id, reply_to_message_id=message.id)
+				except:
+					if acc is None:
+						bot.send_message(message.chat.id,f"**String Session is not Set**", reply_to_message_id=message.id)
+						return
+					try: handle_private(message,username,msgid)
+					except Exception as e: bot.send_message(message.chat.id,f"**Error** : __{e}__", reply_to_message_id=message.id)
 
-            # private
-            if "https://t.me/c/" in message.text:
-                chatid = int("-100" + datas[4])
-
-                if acc is None:
-                    await bot.send_message(message.chat.id, "**String Session is not Set**", reply_to_message_id=message.id)
-                    return
-
-                handle_private(message, chatid, msgid)
-
-            # bot
-            elif "https://t.me/b/" in message.text:
-                username = datas[4]
-
-                if acc is None:
-                    await bot.send_message(message.chat.id, "**String Session is not Set**", reply_to_message_id=message.id)
-                    return
-
-                try:
-                    handle_private(message, username, msgid)
-                except Exception as e:
-                    await bot.send_message(message.chat.id, f"**Error** : __{e}__", reply_to_message_id=message.id)
-
-            # public
-            else:
-                username = datas[3]
-
-                try:
-                    msg = await bot.get_messages(username, msgid)
-                except UsernameNotOccupied:
-                    await bot.send_message(message.chat.id, "**The username is not occupied by anyone**", reply_to_message_id=message.id)
-                    return
-
-                try:
-                    if '?single' not in message.text:
-                        await bot.copy_message(message.chat.id, msg.chat.id, msg.id, reply_to_message_id=message.id)
-                    else:
-                        await bot.copy_media_group(message.chat.id, msg.chat.id, msg.id, reply_to_message_id=message.id)
-                except:
-                    if acc is None:
-                        await bot.send_message(message.chat.id, "**String Session is not Set**", reply_to_message_id=message.id)
-                        return
-
-                    try:
-                        handle_private(message, username, msgid)
-                    except Exception as e:
-                        await bot.send_message(message.chat.id, f"**Error** : __{e}__", reply_to_message_id=message.id)
-
-            time.sleep(3)
-
-
+			# wait time
+			time.sleep(3)
 
 
 # handle private
@@ -293,37 +250,36 @@ def get_message_type(msg: pyrogram.types.messages_and_media.message.Message):
 	except: pass
 
 
-USAGE =  """**SINGLE POST FOR PUBLIC CHANNEL**
-Just send the post link.
+USAGE = """**FOR PUBLIC CHATS**
 
-**SINGLE POST FOR PRIVATE CHANNEL**
-First send the invite link to the channel or group, then
-send the post link.
+__just send post/s link__
 
-**MULTI POSTS FOR PRIVATE/PUBLIC CHANNEL**
-Send post links in the format `from - to` to send multiple
-messages, like:
+**FOR PRIVATE CHATS**
+
+__first send invite link of the chat (unnecessary if the account of string session already member of the chat)
+then send post/s link__
+
+**FOR BOT CHATS**
+
+__send link with '/b/', bot's username and message id, you might want to install some unofficial client to get the id like below__
+
 ```
-https://t.me/xxxx/101-120
+https://t.me/b/botusername/4321
+```
+
+**MULTI POSTS**
+
+__send public/private posts link as explained above with formate "from - to" to send multiple messages like below__
+
+```
+https://t.me/xxxx/1001-1010
+
 https://t.me/c/xxxx/101 - 120
 ```
-**Note: Space doesn’t matter ‼️**"""
+
+__note that space in between doesn't matter__
+"""
 
 
-from flask import Flask
-import threading
-
-app_flask = Flask(__name__)
-
-@app_flask.route('/')
-def home():
-    return "Bot is Running 24/7!"
-
-def run_flask():
-    app_flask.run(host="0.0.0.0", port=8080)
-
-if __name__ == "__main__":
-    # Flask ko alag thread me start karo
-    threading.Thread(target=run_flask).start()
-    bot.run()
-    
+# infinty polling
+bot.run()
