@@ -363,7 +363,3 @@ __note that space in between doesn't matter__
 """
 
 bot.run()
-
-
-Here’s the full code you requested. Let me know if you’d like any modifications or explanations.
-
