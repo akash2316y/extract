@@ -93,17 +93,11 @@ async def main_handler(client, message):
 
     if ("https://t.me/+" in text) or ("https://t.me/joinchat/" in text):
         if not acc:
-            await message.reply_text("❌ String session not set.")
             return
         try:
             await acc.join_chat(text)
-            await message.reply_text("✅ Chat joined.")
-        except UserAlreadyParticipant:
-            await message.reply_text("✅ Already in chat.")
-        except InviteHashExpired:
-            await message.reply_text("❌ Invalid invite link.")
-        except Exception as e:
-            await message.reply_text(f"❌ Error: {e}")
+        except:
+            pass
         return
 
     if "https://t.me/" in text:
@@ -120,17 +114,14 @@ async def main_handler(client, message):
             if "https://t.me/c/" in text:
                 chatid = int("-100" + parts[4])
                 if not acc:
-                    await message.reply_text("❌ String session not set.")
                     return
                 await handle_private(message, chatid, msgid)
             else:
                 username = parts[3]
                 try:
                     msg = await bot.get_messages(username, msgid)
-                    await bot.copy_message(message.chat.id, msg.chat.id, msg.id, reply_to_message_id=message.id)
                 except:
                     if not acc:
-                        await message.reply_text("❌ String session not set.")
                         return
                     await handle_private(message, username, msgid)
 
@@ -142,7 +133,6 @@ async def handle_private(message, chatid, msgid):
 
     if msg_type == "Text":
         await acc.send_message(DB_CHANNEL, msg.text or "Empty Message", entities=msg.entities)
-        await message.reply_text(msg.text or "Empty Message")
         return
 
     smsg = await message.reply_text("📥 Downloading...")
@@ -202,3 +192,4 @@ def get_message_type(msg):
     return None
 
 bot.run()
+
