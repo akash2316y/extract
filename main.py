@@ -84,11 +84,11 @@ def save(client: pyrogram.client.Client, message: pyrogram.types.messages_and_me
 			return
 
 		try:
-			try: acc.join_chat(message.text)
+			try: await acc.join_chat(message.text)	
 			except Exception as e: 
 				bot.send_message(message.chat.id,f"**Error** : __{e}__", reply_to_message_id=message.id)
 				return
-			bot.send_message(message.chat.id,"**Chat Joined**", reply_to_message_id=message.id)
+			await bot.send_message(message.chat.id, "**Chat Joined**", reply_to_message_id=message.id)
 		except UserAlreadyParticipant:
 			bot.send_message(message.chat.id,"**Chat alredy Joined**", reply_to_message_id=message.id)
 		except InviteHashExpired:
