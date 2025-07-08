@@ -7,61 +7,166 @@ import time
 import os
 import threading
 import json
+import asyncio
 
-with open('config.json', 'r') as f: DATA = json.load(f)
-def getenv(var): return os.environ.get(var) or DATA.get(var, None)
+with open('config.json', 'r') as f:
+    DATA = json.load(f)
 
-bot_token = getenv("TOKEN") 
-api_hash = getenv("HASH") 
+def getenv(var):
+    return os.environ.get(var) or DATA.get(var, None)
+
+bot_token = getenv("TOKEN")
+api_hash = getenv("HASH")
 api_id = getenv("ID")
 bot = Client("mybot", api_id=api_id, api_hash=api_hash, bot_token=bot_token)
 
 ss = getenv("STRING")
 if ss is not None:
-	acc = Client("myacc" ,api_id=api_id, api_hash=api_hash, session_string=ss)
-	acc.start()
-else: acc = None
+    acc = Client("myacc", api_id=api_id, api_hash=api_hash, session_string=ss)
+    acc.start()
+else:
+    acc = None
 
-# download status
-def downstatus(statusfile,message):
-	while True:
-		if os.path.exists(statusfile):
-			break
+progress_start_time = {}
 
-	time.sleep(3)      
-	while os.path.exists(statusfile):
-		with open(statusfile,"r") as downread:
-			txt = downread.read()
-		try:
-			bot.edit_message_text(message.chat.id, message.id, f"__Downloaded__ : **{txt}**")
-			time.sleep(10)
-		except:
-			time.sleep(5)
+# Helper functions
 
-
-# upload status
-def upstatus(statusfile,message):
-	while True:
-		if os.path.exists(statusfile):
-			break
-
-	time.sleep(3)      
-	while os.path.exists(statusfile):
-		with open(statusfile,"r") as upread:
-			txt = upread.read()
-		try:
-			bot.edit_message_text(message.chat.id, message.id, f"__Uploaded__ : **{txt}**")
-			time.sleep(10)
-		except:
-			time.sleep(5)
+def human_readable(size):
+    if size == 0:
+        return "0B"
+    power = 2**10
+    n = 0
+    power_labels = {0: '', 1: 'Ki', 2: 'Mi', 3: 'Gi', 4: 'Ti'}
+    while size >= power and n < 4:
+        size /= power
+        n += 1
+    return f"{size:.2f} {power_labels[n]}B"
 
 
-# progress writter
+def get_progress_bar(current, total):
+    percent = current / total
+    bar_length = 10
+    filled_length = int(bar_length * percent)
+    bar = '▪️' * filled_length + '▫️' * (bar_length - filled_length)
+    return bar
+
+
 def progress(current, total, message, type):
-	with open(f'{message.id}{type}status.txt',"w") as fileup:
-		fileup.write(f"{current * 100 / total:.1f}%")
+    now = time.time()
+    key = f"{message.id}{type}"
 
-# start command
+    if key not in progress_start_time:
+        progress_start_time[key] = now
+        start_time = now
+    else:
+        start_time = progress_start_time[key]
+
+    elapsed_time = now - start_time
+    speed = current / elapsed_time if elapsed_time > 0 else 0
+    eta = (total - current) / speed if speed > 0 else 0
+
+    percentage = current * 100 / total
+    bar = get_progress_bar(current, total)
+
+    eta_str = time.strftime("%M:%S", time.gmtime(eta))
+    speed_str = human_readable(speed) + "/s"
+    current_str = human_readable(current)
+    total_str = human_readable(total)
+
+    status_text = (
+        f"📥 {'Downloading' if type == 'down' else 'Uploading'}\n\n"
+        f"[{bar}]\n"
+        f"Progress: {percentage:.2f}%\n"
+        f"Size: {current_str} of {total_str}\n"
+        f"Speed: {speed_str}\n"
+        f"ETA: {eta_str}"
+    )
+
+    with open(f'{message.id}{type}status.txt', "w") as fileup:
+        fileup.write(status_text)
+
+
+# Status updaters
+
+def downstatus(statusfile, message):
+    while not os.path.exists(statusfile):
+        time.sleep(1)
+
+    time.sleep(3)
+
+    while os.path.exists(statusfile):
+        with open(statusfile, "r") as downread:
+            txt = downread.read()
+        try:
+            bot.edit_message_text(message.chat.id, message.id, txt)
+            time.sleep(10)
+        except:
+            time.sleep(5)
+
+
+def upstatus(statusfile, message):
+    while not os.path.exists(statusfile):
+        time.sleep(1)
+
+    time.sleep(3)
+
+    while os.path.exists(statusfile):
+        with open(statusfile, "r") as upread:
+            txt = upread.read()
+        try:
+            bot.edit_message_text(message.chat.id, message.id, txt)
+            time.sleep(10)
+        except:
+            time.sleep(5)
+
+
+# Get message type
+
+def get_message_type(msg):
+    try:
+        msg.document.file_id
+        return "Document"
+    except:
+        pass
+    try:
+        msg.video.file_id
+        return "Video"
+    except:
+        pass
+    try:
+        msg.animation.file_id
+        return "Animation"
+    except:
+        pass
+    try:
+        msg.sticker.file_id
+        return "Sticker"
+    except:
+        pass
+    try:
+        msg.voice.file_id
+        return "Voice"
+    except:
+        pass
+    try:
+        msg.audio.file_id
+        return "Audio"
+    except:
+        pass
+    try:
+        msg.photo.file_id
+        return "Photo"
+    except:
+        pass
+    try:
+        msg.text
+        return "Text"
+    except:
+        pass
+
+
+# Start command
+
 @bot.on_message(filters.command(["start"]))
 async def send_start(client, message):
     await bot.send_message(
@@ -69,6 +174,7 @@ async def send_start(client, message):
         text=f"👋 Hi **{message.from_user.mention}**, I can send you restricted content by its post link.\n\n{USAGE}",
         reply_to_message_id=message.id
     )
+
 
 @bot.on_message(filters.text)
 async def save(client, message):
@@ -134,12 +240,9 @@ async def save(client, message):
 
             await asyncio.sleep(3)
 
-# handle private
-import asyncio
-import os
 
-async def handle_private(message: pyrogram.types.messages_and_media.message.Message, chatid: int, msgid: int):
-    msg = await acc.get_messages(chatid, msgid)  # ✅ Awaited
+async def handle_private(message, chatid, msgid):
+    msg = await acc.get_messages(chatid, msgid)
     msg_type = get_message_type(msg)
 
     if msg_type == "Text":
@@ -148,15 +251,14 @@ async def handle_private(message: pyrogram.types.messages_and_media.message.Mess
 
     smsg = await bot.send_message(message.chat.id, '__Downloading__', reply_to_message_id=message.id)
 
-    # Start download status in background thread
     asyncio.create_task(asyncio.to_thread(downstatus, f'{message.id}downstatus.txt', smsg))
 
-    file = await acc.download_media(msg, progress=progress, progress_args=[message, "down"])  # ✅ Awaited
+    file = await acc.download_media(msg, progress=progress, progress_args=[message, "down"])
 
     if os.path.exists(f'{message.id}downstatus.txt'):
         os.remove(f'{message.id}downstatus.txt')
+        progress_start_time.pop(f"{message.id}down", None)
 
-    # Start upload status in background thread
     asyncio.create_task(asyncio.to_thread(upstatus, f'{message.id}upstatus.txt', smsg))
 
     thumb = None
@@ -219,57 +321,15 @@ async def handle_private(message: pyrogram.types.messages_and_media.message.Mess
             )
 
     finally:
-        # Cleanup
         if thumb and os.path.exists(thumb):
             os.remove(thumb)
         if file and os.path.exists(file):
             os.remove(file)
         if os.path.exists(f'{message.id}upstatus.txt'):
             os.remove(f'{message.id}upstatus.txt')
+            progress_start_time.pop(f"{message.id}up", None)
+
         await bot.delete_messages(message.chat.id, [smsg.id])
-	    
-
-# get the type of message
-def get_message_type(msg: pyrogram.types.messages_and_media.message.Message):
-	try:
-		msg.document.file_id
-		return "Document"
-	except: pass
-
-	try:
-		msg.video.file_id
-		return "Video"
-	except: pass
-
-	try:
-		msg.animation.file_id
-		return "Animation"
-	except: pass
-
-	try:
-		msg.sticker.file_id
-		return "Sticker"
-	except: pass
-
-	try:
-		msg.voice.file_id
-		return "Voice"
-	except: pass
-
-	try:
-		msg.audio.file_id
-		return "Audio"
-	except: pass
-
-	try:
-		msg.photo.file_id
-		return "Photo"
-	except: pass
-
-	try:
-		msg.text
-		return "Text"
-	except: pass
 
 
 USAGE = """**FOR PUBLIC CHATS**
@@ -302,6 +362,8 @@ https://t.me/c/xxxx/101 - 120
 __note that space in between doesn't matter__
 """
 
-
-# infinty polling
 bot.run()
+
+
+Here’s the full code you requested. Let me know if you’d like any modifications or explanations.
+
