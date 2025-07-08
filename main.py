@@ -73,11 +73,13 @@ Size: {humanbytes(current)} of {humanbytes(total)}
 Speed: {humanbytes(speed)}/s
 ETA: {time_formatter(eta * 1000)}"""
 
-    try:
-        await message.edit_text(text)
+   try:
+        if not hasattr(message, 'last_edit') or (time.time() - message.last_edit) > 5:
+            await message.edit_text(text)
+            message.last_edit = time.time()
     except:
         pass
-
+        
 def get_message_type(msg):
     if msg.document: return "Document"
     if msg.video: return "Video"
