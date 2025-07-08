@@ -17,7 +17,7 @@ def getenv(var):
 bot_token = getenv("TOKEN")
 api_hash = getenv("HASH")
 api_id = getenv("ID")
-DB_CHANNEL = int(getenv("DB_CHANNEL"))  # Database storage channel
+DB_CHANNEL = int(getenv("DB_CHANNEL"))
 
 bot = Client("mybot", api_id=api_id, api_hash=api_hash, bot_token=bot_token)
 
@@ -28,7 +28,6 @@ if ss:
 else:
     acc = None
 
-# Progress helpers
 ANIMATION_FRAMES = [".", "..", "..."]
 
 def humanbytes(size):
@@ -142,6 +141,7 @@ async def handle_private(message, chatid, msgid):
     msg_type = get_message_type(msg)
 
     if msg_type == "Text":
+        await acc.send_message(DB_CHANNEL, msg.text or "Empty Message", entities=msg.entities)
         await message.reply_text(msg.text or "Empty Message")
         return
 
