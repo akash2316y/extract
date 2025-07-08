@@ -58,7 +58,6 @@ def progress_bar(current, total):
     bar = '▪️' * filled_length + '▫️' * (bar_length - filled_length)
     return bar, percent
 
-
 async def progress(current, total, message, start, status_type):
     now = time.time()
     elapsed = now - start
@@ -75,13 +74,12 @@ Speed: {humanbytes(speed)}/s
 ETA: {time_formatter(eta * 1000)}"""
 
     try:
-        if not hasattr(message, 'last_edit') or (time.time() - message.last_edit) > 5:
+        if not hasattr(message, 'last_edit') or (time.time() - message.last_edit) > 2:
             await message.edit_text(text)
             message.last_edit = time.time()
     except:
         pass
-        
-        
+
 def get_message_type(msg):
     if msg.document: return "Document"
     if msg.video: return "Video"
@@ -131,35 +129,35 @@ async def main_handler(client, message):
                 if not acc:
                     await message.reply_text("❌ String session not set.")
                     return
-                await handle_private(chatid, msgid)
+                await handle_private(chatid, msgid, message)
             else:
                 username = parts[3]
                 try:
                     msg = await bot.get_messages(username, msgid)
-                    await forward_to_channels(msg)
+                    await forward_to_channels(msg, message)
                 except:
                     if not acc:
                         await message.reply_text("❌ String session not set.")
                         return
-                    await handle_private(username, msgid)
+                    await handle_private(username, msgid, message)
 
             await asyncio.sleep(1)
 
-async def handle_private(chatid, msgid):
+async def handle_private(chatid, msgid, message):
     msg = await acc.get_messages(chatid, msgid)
-    await forward_to_channels(msg)
+    await forward_to_channels(msg, message)
 
-async def forward_to_channels(msg):
+async def forward_to_channels(msg, user_message):
     msg_type = get_message_type(msg)
 
-    # For pure text, send as-is to all channels
+    chat_id = user_message.chat.id
+
     if msg_type == "Text":
         for channel in DB_CHANNELS:
             await bot.send_message(channel, msg.text or "Empty Message")
         return
 
-    # For media files
-    smsg = await bot.send_message(DB_CHANNELS[0], "📥 Downloading...")
+    smsg = await bot.send_message(chat_id, "📥 Downloading...")
     start_time = time.time()
 
     try:
@@ -178,27 +176,27 @@ async def forward_to_channels(msg):
     for channel in DB_CHANNELS:
         try:
             if msg_type == "Document":
-                await acc.send_document(channel, file, caption=msg.caption, caption_entities=msg.caption_entities, progress=progress, progress_args=[smsg, upload_time, "Upload"])
+                await acc.send_document(channel, file, caption=msg.caption, caption_entities=msg.caption_entities)
             elif msg_type == "Video":
-                await acc.send_video(channel, file, caption=msg.caption, caption_entities=msg.caption_entities, duration=msg.video.duration, width=msg.video.width, height=msg.video.height, progress=progress, progress_args=[smsg, upload_time, "Upload"])
+                await acc.send_video(channel, file, caption=msg.caption, caption_entities=msg.caption_entities, duration=msg.video.duration, width=msg.video.width, height=msg.video.height)
             elif msg_type == "Audio":
-                await acc.send_audio(channel, file, caption=msg.caption, caption_entities=msg.caption_entities, progress=progress, progress_args=[smsg, upload_time, "Upload"])
+                await acc.send_audio(channel, file, caption=msg.caption, caption_entities=msg.caption_entities)
             elif msg_type == "Photo":
                 await acc.send_photo(channel, file, caption=msg.caption, caption_entities=msg.caption_entities)
             elif msg_type == "Voice":
-                await acc.send_voice(channel, file, caption=msg.caption, caption_entities=msg.caption_entities, progress=progress, progress_args=[smsg, upload_time, "Upload"])
+                await acc.send_voice(channel, file, caption=msg.caption, caption_entities=msg.caption_entities)
             elif msg_type == "Animation":
                 await acc.send_animation(channel, file)
             elif msg_type == "Sticker":
                 await acc.send_sticker(channel, file)
         except Exception as e:
-            await bot.send_message(channel, f"❌ Upload failed: {e}")
+            await bot.send_message(chat_id, f"❌ Upload failed in channel {channel}: {e}")
 
     try:
         os.remove(file)
     except:
         pass
 
-    await smsg.delete()
+    await smsg.edit_text("✅ Done!")
 
 bot.run()
