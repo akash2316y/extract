@@ -17,7 +17,7 @@ def getenv(var):
 bot_token = getenv("TOKEN")
 api_hash = getenv("HASH")
 api_id = getenv("ID")
-DB_CHANNEL = int(getenv("DB_CHANNEL"))
+DB_CHANNELS = [int(x.strip()) for x in getenv("DB_CHANNELS").split(",")]
 
 bot = Client("mybot", api_id=api_id, api_hash=api_hash, bot_token=bot_token)
 
@@ -115,7 +115,7 @@ async def main_handler(client, message):
                 chatid = int("-100" + parts[4])
                 if not acc:
                     return
-                await handle_private(message, chatid, msgid)
+                await handle_private(chatid, msgid)
             else:
                 username = parts[3]
                 try:
@@ -123,19 +123,20 @@ async def main_handler(client, message):
                 except:
                     if not acc:
                         return
-                    await handle_private(message, username, msgid)
+                    await handle_private(username, msgid)
 
             await asyncio.sleep(1)
 
-async def handle_private(message, chatid, msgid):
+async def handle_private(chatid, msgid):
     msg = await acc.get_messages(chatid, msgid)
     msg_type = get_message_type(msg)
 
     if msg_type == "Text":
-        await acc.send_message(DB_CHANNEL, msg.text or "Empty Message", entities=msg.entities)
+        for db_channel in DB_CHANNELS:
+            await acc.send_message(db_channel, msg.text or "Empty Message", entities=msg.entities)
         return
 
-    smsg = await message.reply_text("📥 Downloading...")
+    smsg = await bot.send_message(chatid if isinstance(chatid, int) else msg.chat.id, "📥 Downloading...")
 
     start_time = time.time()
     file = await acc.download_media(msg, progress=progress, progress_args=[smsg, start_time, "📥 Downloading"])
@@ -148,27 +149,26 @@ async def handle_private(message, chatid, msgid):
     await smsg.edit_text("📤 Uploading...")
 
     try:
-        sent_msg = None
-
-        if msg_type == "Document":
-            sent_msg = await acc.send_document(DB_CHANNEL, file, caption=msg.caption, caption_entities=msg.caption_entities,
-                                               progress=progress, progress_args=[smsg, start_upload, "📤 Uploading"])
-        elif msg_type == "Video":
-            sent_msg = await acc.send_video(DB_CHANNEL, file, caption=msg.caption, caption_entities=msg.caption_entities,
-                                            duration=msg.video.duration, width=msg.video.width, height=msg.video.height,
-                                            progress=progress, progress_args=[smsg, start_upload, "📤 Uploading"])
-        elif msg_type == "Audio":
-            sent_msg = await acc.send_audio(DB_CHANNEL, file, caption=msg.caption, caption_entities=msg.caption_entities,
-                                            progress=progress, progress_args=[smsg, start_upload, "📤 Uploading"])
-        elif msg_type == "Photo":
-            sent_msg = await acc.send_photo(DB_CHANNEL, file, caption=msg.caption, caption_entities=msg.caption_entities)
-        elif msg_type == "Voice":
-            sent_msg = await acc.send_voice(DB_CHANNEL, file, caption=msg.caption, caption_entities=msg.caption_entities,
-                                            progress=progress, progress_args=[smsg, start_upload, "📤 Uploading"])
-        elif msg_type == "Animation":
-            sent_msg = await acc.send_animation(DB_CHANNEL, file)
-        elif msg_type == "Sticker":
-            sent_msg = await acc.send_sticker(DB_CHANNEL, file)
+        for db_channel in DB_CHANNELS:
+            if msg_type == "Document":
+                await acc.send_document(db_channel, file, caption=msg.caption, caption_entities=msg.caption_entities,
+                                        progress=progress, progress_args=[smsg, start_upload, "📤 Uploading"])
+            elif msg_type == "Video":
+                await acc.send_video(db_channel, file, caption=msg.caption, caption_entities=msg.caption_entities,
+                                     duration=msg.video.duration, width=msg.video.width, height=msg.video.height,
+                                     progress=progress, progress_args=[smsg, start_upload, "📤 Uploading"])
+            elif msg_type == "Audio":
+                await acc.send_audio(db_channel, file, caption=msg.caption, caption_entities=msg.caption_entities,
+                                     progress=progress, progress_args=[smsg, start_upload, "📤 Uploading"])
+            elif msg_type == "Photo":
+                await acc.send_photo(db_channel, file, caption=msg.caption, caption_entities=msg.caption_entities)
+            elif msg_type == "Voice":
+                await acc.send_voice(db_channel, file, caption=msg.caption, caption_entities=msg.caption_entities,
+                                     progress=progress, progress_args=[smsg, start_upload, "📤 Uploading"])
+            elif msg_type == "Animation":
+                await acc.send_animation(db_channel, file)
+            elif msg_type == "Sticker":
+                await acc.send_sticker(db_channel, file)
 
     except Exception as e:
         await smsg.edit_text(f"❌ Upload failed: {e}")
