@@ -135,63 +135,99 @@ async def save(client, message):
             await asyncio.sleep(3)
 
 # handle private
-def handle_private(message: pyrogram.types.messages_and_media.message.Message, chatid: int, msgid: int):
-		msg: pyrogram.types.messages_and_media.message.Message = acc.get_messages(chatid,msgid)
-		msg_type = get_message_type(msg)
+import asyncio
+import os
 
-		if "Text" == msg_type:
-			bot.send_message(message.chat.id, msg.text, entities=msg.entities, reply_to_message_id=message.id)
-			return
+async def handle_private(message: pyrogram.types.messages_and_media.message.Message, chatid: int, msgid: int):
+    msg = await acc.get_messages(chatid, msgid)  # ✅ Awaited
+    msg_type = get_message_type(msg)
 
-		smsg = bot.send_message(message.chat.id, '__Downloading__', reply_to_message_id=message.id)
-		dosta = threading.Thread(target=lambda:downstatus(f'{message.id}downstatus.txt',smsg),daemon=True)
-		dosta.start()
-		file = acc.download_media(msg, progress=progress, progress_args=[message,"down"])
-		os.remove(f'{message.id}downstatus.txt')
+    if msg_type == "Text":
+        await bot.send_message(message.chat.id, msg.text, entities=msg.entities, reply_to_message_id=message.id)
+        return
 
-		upsta = threading.Thread(target=lambda:upstatus(f'{message.id}upstatus.txt',smsg),daemon=True)
-		upsta.start()
-		
-		if "Document" == msg_type:
-			try:
-				thumb = acc.download_media(msg.document.thumbs[0].file_id)
-			except: thumb = None
-			
-			bot.send_document(message.chat.id, file, thumb=thumb, caption=msg.caption, caption_entities=msg.caption_entities, reply_to_message_id=message.id, progress=progress, progress_args=[message,"up"])
-			if thumb != None: os.remove(thumb)
+    smsg = await bot.send_message(message.chat.id, '__Downloading__', reply_to_message_id=message.id)
 
-		elif "Video" == msg_type:
-			try: 
-				thumb = acc.download_media(msg.video.thumbs[0].file_id)
-			except: thumb = None
+    # Start download status in background thread
+    asyncio.create_task(asyncio.to_thread(downstatus, f'{message.id}downstatus.txt', smsg))
 
-			bot.send_video(message.chat.id, file, duration=msg.video.duration, width=msg.video.width, height=msg.video.height, thumb=thumb, caption=msg.caption, caption_entities=msg.caption_entities, reply_to_message_id=message.id, progress=progress, progress_args=[message,"up"])
-			if thumb != None: os.remove(thumb)
+    file = await acc.download_media(msg, progress=progress, progress_args=[message, "down"])  # ✅ Awaited
 
-		elif "Animation" == msg_type:
-			bot.send_animation(message.chat.id, file, reply_to_message_id=message.id)
-			   
-		elif "Sticker" == msg_type:
-			bot.send_sticker(message.chat.id, file, reply_to_message_id=message.id)
+    if os.path.exists(f'{message.id}downstatus.txt'):
+        os.remove(f'{message.id}downstatus.txt')
 
-		elif "Voice" == msg_type:
-			bot.send_voice(message.chat.id, file, caption=msg.caption, thumb=thumb, caption_entities=msg.caption_entities, reply_to_message_id=message.id, progress=progress, progress_args=[message,"up"])
+    # Start upload status in background thread
+    asyncio.create_task(asyncio.to_thread(upstatus, f'{message.id}upstatus.txt', smsg))
 
-		elif "Audio" == msg_type:
-			try:
-				thumb = acc.download_media(msg.audio.thumbs[0].file_id)
-			except: thumb = None
-				
-			bot.send_audio(message.chat.id, file, caption=msg.caption, caption_entities=msg.caption_entities, reply_to_message_id=message.id, progress=progress, progress_args=[message,"up"])   
-			if thumb != None: os.remove(thumb)
+    thumb = None
 
-		elif "Photo" == msg_type:
-			bot.send_photo(message.chat.id, file, caption=msg.caption, caption_entities=msg.caption_entities, reply_to_message_id=message.id)
+    try:
+        if msg_type == "Document":
+            try:
+                thumb = await acc.download_media(msg.document.thumbs[0].file_id)
+            except:
+                thumb = None
 
-		os.remove(file)
-		if os.path.exists(f'{message.id}upstatus.txt'): os.remove(f'{message.id}upstatus.txt')
-		bot.delete_messages(message.chat.id,[smsg.id])
+            await bot.send_document(
+                message.chat.id, file, thumb=thumb, caption=msg.caption,
+                caption_entities=msg.caption_entities, reply_to_message_id=message.id,
+                progress=progress, progress_args=[message, "up"]
+            )
 
+        elif msg_type == "Video":
+            try:
+                thumb = await acc.download_media(msg.video.thumbs[0].file_id)
+            except:
+                thumb = None
+
+            await bot.send_video(
+                message.chat.id, file, duration=msg.video.duration, width=msg.video.width,
+                height=msg.video.height, thumb=thumb, caption=msg.caption,
+                caption_entities=msg.caption_entities, reply_to_message_id=message.id,
+                progress=progress, progress_args=[message, "up"]
+            )
+
+        elif msg_type == "Animation":
+            await bot.send_animation(message.chat.id, file, reply_to_message_id=message.id)
+
+        elif msg_type == "Sticker":
+            await bot.send_sticker(message.chat.id, file, reply_to_message_id=message.id)
+
+        elif msg_type == "Voice":
+            await bot.send_voice(
+                message.chat.id, file, caption=msg.caption,
+                caption_entities=msg.caption_entities, reply_to_message_id=message.id,
+                progress=progress, progress_args=[message, "up"]
+            )
+
+        elif msg_type == "Audio":
+            try:
+                thumb = await acc.download_media(msg.audio.thumbs[0].file_id)
+            except:
+                thumb = None
+
+            await bot.send_audio(
+                message.chat.id, file, caption=msg.caption,
+                caption_entities=msg.caption_entities, reply_to_message_id=message.id,
+                progress=progress, progress_args=[message, "up"]
+            )
+
+        elif msg_type == "Photo":
+            await bot.send_photo(
+                message.chat.id, file, caption=msg.caption,
+                caption_entities=msg.caption_entities, reply_to_message_id=message.id
+            )
+
+    finally:
+        # Cleanup
+        if thumb and os.path.exists(thumb):
+            os.remove(thumb)
+        if file and os.path.exists(file):
+            os.remove(file)
+        if os.path.exists(f'{message.id}upstatus.txt'):
+            os.remove(f'{message.id}upstatus.txt')
+        await bot.delete_messages(message.chat.id, [smsg.id])
+	    
 
 # get the type of message
 def get_message_type(msg: pyrogram.types.messages_and_media.message.Message):
