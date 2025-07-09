@@ -65,8 +65,14 @@ async def progress(current, total, message, start, status_type, anim_step=[0], l
     speed = current / elapsed if elapsed > 0 else 0
     eta = (total - current) / speed if speed > 0 else 0
 
-    # Check for minimum 2s between updates
-    if now - last_edit_time[0] < 2 and current != total:
+    # Dynamic update interval: faster updates for faster progress
+    min_interval = 0.8  # minimum time between updates (seconds)
+    max_interval = 2.0  # maximum time between updates (seconds)
+
+    # Example: faster speed → shorter interval
+    interval = max(min_interval, min(max_interval, total / (speed + 1e-5) / 20))
+
+    if now - last_edit_time[0] < interval and current != total:
         return
 
     bar, percent = progress_bar(current, total)
@@ -82,7 +88,7 @@ ETA: {time_formatter(eta * 1000)}"""
 
     try:
         await message.edit_text(text)
-        last_edit_time[0] = now  # Update the last edit time
+        last_edit_time[0] = now
     except:
         pass
 
