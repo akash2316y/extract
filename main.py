@@ -59,11 +59,15 @@ def progress_bar(current, total):
     bar = '▪️' * filled_length + '▫️' * (bar_length - filled_length)
     return bar, percent
 
-async def progress(current, total, message, start, status_type, anim_step=[0]):
+async def progress(current, total, message, start, status_type, anim_step=[0], last_edit_time=[0]):
     now = time.time()
     elapsed = now - start
     speed = current / elapsed if elapsed > 0 else 0
     eta = (total - current) / speed if speed > 0 else 0
+
+    # Check for minimum 2s between updates
+    if now - last_edit_time[0] < 2 and current != total:
+        return
 
     bar, percent = progress_bar(current, total)
     dots = ANIMATION_FRAMES[anim_step[0] % len(ANIMATION_FRAMES)]
@@ -78,6 +82,7 @@ ETA: {time_formatter(eta * 1000)}"""
 
     try:
         await message.edit_text(text)
+        last_edit_time[0] = now  # Update the last edit time
     except:
         pass
 
