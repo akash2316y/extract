@@ -48,12 +48,20 @@ def time_formatter(milliseconds: int) -> str:
     seconds = int(milliseconds / 1000)
     minutes, seconds = divmod(seconds, 60)
     hours, minutes = divmod(minutes, 60)
-    if hours:
-        return f"{hours}h, {minutes}m, {seconds}s"
-    elif minutes:
-        return f"{minutes}m, {seconds}s"
-    else:
-        return f"{seconds}s"
+    return f"{hours}h, {minutes}m, {seconds}s"
+
+async def handle_flood_wait(e, message, context=""):
+    wait_time = time_formatter(e.value * 1000)
+    text = f"⏳ FloodWait {context}: Sleeping for {wait_time} ({e.value} seconds)"
+    try:
+        await message.reply_text(text)
+    except:
+        pass
+    print(text)
+    await asyncio.sleep(e.value)
+    restart_bot()
+
+# Progress bar
 
 def progress_bar(current, total):
     percent = current * 100 / total
@@ -86,13 +94,9 @@ async def safe_edit(message, text):
     try:
         await message.edit_text(text)
     except FloodWait as e:
-        wait_time = time_formatter(e.value * 1000)
-        await message.edit_text(f"⏳ FloodWait: Sleeping for {wait_time}")
-        print(f"FloodWait: {e.value} seconds")
-        await asyncio.sleep(e.value)
-        restart_bot()
-    except Exception as e:
-        print(f"Edit failed: {e}")
+        await handle_flood_wait(e, message, "while editing")
+    except:
+        pass
 
 async def progress(current, total, message, start, status_type, anim_step=[0], last_edit_time=[0]):
     now = time.time()
@@ -173,17 +177,18 @@ async def main_handler(client, message):
                 await asyncio.sleep(1)
 
             except FloodWait as e:
-                wait_time = time_formatter(e.value * 1000)
-                await message.reply_text(f"⏳ FloodWait: Sleeping for {wait_time}")
-                print(f"FloodWait: {e.value} seconds")
-                await asyncio.sleep(e.value)
-                restart_bot()
+                await handle_flood_wait(e, message, "while processing")
             except Exception as e:
                 print(f"Error: {e}")
         clear_state()
 
 async def handle_private(message, chatid, msgid):
-    msg = await acc.get_messages(chatid, msgid)
+    try:
+        msg = await acc.get_messages(chatid, msgid)
+    except FloodWait as e:
+        await handle_flood_wait(e, message, "while fetching message")
+        return
+
     msg_type = get_message_type(msg)
 
     if msg_type == "Text":
@@ -193,7 +198,11 @@ async def handle_private(message, chatid, msgid):
     smsg = await message.reply_text("📥 Downloading...")
 
     start_time = time.time()
-    file = await acc.download_media(msg, progress=progress, progress_args=[smsg, start_time, "📥 Downloading"])
+    try:
+        file = await acc.download_media(msg, progress=progress, progress_args=[smsg, start_time, "📥 Downloading"])
+    except FloodWait as e:
+        await handle_flood_wait(e, message, "while downloading")
+        return
 
     if not file:
         await safe_edit(smsg, "❌ Failed to download.")
@@ -224,11 +233,7 @@ async def handle_private(message, chatid, msgid):
             await acc.send_sticker(DB_CHANNEL, file)
 
     except FloodWait as e:
-        wait_time = time_formatter(e.value * 1000)
-        await message.reply_text(f"⏳ FloodWait during upload: Sleeping for {wait_time}")
-        print(f"FloodWait during upload: {e.value} seconds")
-        await asyncio.sleep(e.value)
-        restart_bot()
+        await handle_flood_wait(e, message, "during upload")
     except Exception as e:
         await safe_edit(smsg, f"❌ Upload failed: {e}")
     finally:
