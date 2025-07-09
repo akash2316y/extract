@@ -1,6 +1,6 @@
 import pyrogram
 from pyrogram import Client, filters
-from pyrogram.errors import UserAlreadyParticipant, InviteHashExpired
+from pyrogram.errors import UserAlreadyParticipant, InviteHashExpired, FloodWait
 import asyncio
 import os
 import json
@@ -59,20 +59,15 @@ def progress_bar(current, total):
     bar = '▪️' * filled_length + '▫️' * (bar_length - filled_length)
     return bar, percent
 
+
 async def progress(current, total, message, start, status_type, anim_step=[0], last_edit_time=[0]):
     now = time.time()
     elapsed = now - start
     speed = current / elapsed if elapsed > 0 else 0
     eta = (total - current) / speed if speed > 0 else 0
 
-    # Dynamic update interval: faster updates for faster progress
-    min_interval = 0.8  # minimum time between updates (seconds)
-    max_interval = 2.0  # maximum time between updates (seconds)
-
-    # Example: faster speed → shorter interval
-    interval = max(min_interval, min(max_interval, total / (speed + 1e-5) / 20))
-
-    if now - last_edit_time[0] < interval and current != total:
+    # Safe update: only every 3 seconds or when complete
+    if now - last_edit_time[0] < 3 and current != total:
         return
 
     bar, percent = progress_bar(current, total)
@@ -88,8 +83,12 @@ ETA: {time_formatter(eta * 1000)}"""
 
     try:
         await message.edit_text(text)
-        last_edit_time[0] = now
-    except:
+        last_edit_time[0] = now  # Update last edit time
+    except FloodWait as e:
+        print(f"FloodWait: Sleeping for {e.value} seconds")
+        await asyncio.sleep(e.value)
+    except Exception as e:
+        print(f"Edit failed: {e}")
         pass
 
     anim_step[0] += 1
