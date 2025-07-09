@@ -49,7 +49,7 @@ def time_formatter(milliseconds: int) -> str:
     minutes, seconds = divmod(seconds, 60)
     hours, minutes = divmod(minutes, 60)
     if hours:
-        return f"{hours}h, {minutes}m"
+        return f"{hours}h, {minutes}m, {seconds}s"
     elif minutes:
         return f"{minutes}m, {seconds}s"
     else:
@@ -86,6 +86,8 @@ async def safe_edit(message, text):
     try:
         await message.edit_text(text)
     except FloodWait as e:
+        wait_time = time_formatter(e.value * 1000)
+        await message.edit_text(f"⏳ FloodWait: Sleeping for {wait_time}")
         print(f"FloodWait: {e.value} seconds")
         await asyncio.sleep(e.value)
         restart_bot()
@@ -171,6 +173,8 @@ async def main_handler(client, message):
                 await asyncio.sleep(1)
 
             except FloodWait as e:
+                wait_time = time_formatter(e.value * 1000)
+                await message.reply_text(f"⏳ FloodWait: Sleeping for {wait_time}")
                 print(f"FloodWait: {e.value} seconds")
                 await asyncio.sleep(e.value)
                 restart_bot()
@@ -220,6 +224,8 @@ async def handle_private(message, chatid, msgid):
             await acc.send_sticker(DB_CHANNEL, file)
 
     except FloodWait as e:
+        wait_time = time_formatter(e.value * 1000)
+        await message.reply_text(f"⏳ FloodWait during upload: Sleeping for {wait_time}")
         print(f"FloodWait during upload: {e.value} seconds")
         await asyncio.sleep(e.value)
         restart_bot()
@@ -246,3 +252,4 @@ def get_message_type(msg):
     return None
 
 bot.run()
+
