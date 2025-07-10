@@ -1,11 +1,9 @@
 import pyrogram
 from pyrogram import Client, filters
-from pyrogram.errors import UserAlreadyParticipant, InviteHashExpired
 import asyncio
 import os
 import json
 import time
-import math
 from pathlib import Path
 
 # Load configuration
@@ -31,6 +29,7 @@ else:
 
 ANIMATION_FRAMES = [".", "..", "..."]
 
+# Human-readable file size
 def humanbytes(size):
     if not size:
         return "0B"
@@ -42,6 +41,7 @@ def humanbytes(size):
         n += 1
     return f"{size:.2f} {units[n]}"
 
+# Time formatter
 def time_formatter(milliseconds: int) -> str:
     seconds = int(milliseconds / 1000)
     minutes, seconds = divmod(seconds, 60)
@@ -53,6 +53,7 @@ def time_formatter(milliseconds: int) -> str:
     else:
         return f"{seconds}s"
 
+# Progress bar
 def progress_bar(current, total):
     percent = current * 100 / total
     bar_length = 10
@@ -60,6 +61,23 @@ def progress_bar(current, total):
     bar = '▪️' * filled_length + '▫️' * (bar_length - filled_length)
     return bar, percent
 
+# Extract file name
+def extract_filename(msg):
+    if msg.document and msg.document.file_name:
+        return msg.document.file_name
+    if msg.video and msg.video.file_name:
+        return msg.video.file_name
+    if msg.audio and msg.audio.file_name:
+        return msg.audio.file_name
+    if msg.voice and msg.voice.file_name:
+        return msg.voice.file_name
+    if msg.animation and msg.animation.file_name:
+        return msg.animation.file_name
+    if msg.sticker and msg.sticker.file_name:
+        return msg.sticker.file_name
+    return "Unknown"
+
+# Progress function
 async def progress(current, total, message, start, status_type, filename="", anim_step=[0]):
     now = time.time()
     elapsed = now - start
@@ -141,7 +159,7 @@ async def handle_private(message, chatid, msgid):
     smsg = await message.reply_text("📥 Downloading...")
 
     start_time = time.time()
-    filename = msg.file_name or "Unknown"
+    filename = extract_filename(msg)
 
     file = await acc.download_media(msg, progress=progress, progress_args=[smsg, start_time, "📥 Downloading", filename])
 
@@ -155,27 +173,31 @@ async def handle_private(message, chatid, msgid):
     file_basename = Path(file).name
 
     try:
-        sent_msg = None
-
         if msg_type == "Document":
-            sent_msg = await acc.send_document(DB_CHANNEL, file, caption=msg.caption, caption_entities=msg.caption_entities,
-                                               progress=progress, progress_args=[smsg, start_upload, "📤 Uploading", file_basename])
+            await acc.send_document(DB_CHANNEL, file, caption=msg.caption, caption_entities=msg.caption_entities,
+                                     progress=progress, progress_args=[smsg, start_upload, "📤 Uploading", file_basename])
+
         elif msg_type == "Video":
-            sent_msg = await acc.send_video(DB_CHANNEL, file, caption=msg.caption, caption_entities=msg.caption_entities,
-                                            duration=msg.video.duration, width=msg.video.width, height=msg.video.height,
-                                            progress=progress, progress_args=[smsg, start_upload, "📤 Uploading", file_basename])
+            await acc.send_video(DB_CHANNEL, file, caption=msg.caption, caption_entities=msg.caption_entities,
+                                  duration=msg.video.duration, width=msg.video.width, height=msg.video.height,
+                                  progress=progress, progress_args=[smsg, start_upload, "📤 Uploading", file_basename])
+
         elif msg_type == "Audio":
-            sent_msg = await acc.send_audio(DB_CHANNEL, file, caption=msg.caption, caption_entities=msg.caption_entities,
-                                            progress=progress, progress_args=[smsg, start_upload, "📤 Uploading", file_basename])
+            await acc.send_audio(DB_CHANNEL, file, caption=msg.caption, caption_entities=msg.caption_entities,
+                                  progress=progress, progress_args=[smsg, start_upload, "📤 Uploading", file_basename])
+
         elif msg_type == "Photo":
-            sent_msg = await acc.send_photo(DB_CHANNEL, file, caption=msg.caption, caption_entities=msg.caption_entities)
+            await acc.send_photo(DB_CHANNEL, file, caption=msg.caption, caption_entities=msg.caption_entities)
+
         elif msg_type == "Voice":
-            sent_msg = await acc.send_voice(DB_CHANNEL, file, caption=msg.caption, caption_entities=msg.caption_entities,
-                                             progress=progress, progress_args=[smsg, start_upload, "📤 Uploading", file_basename])
+            await acc.send_voice(DB_CHANNEL, file, caption=msg.caption, caption_entities=msg.caption_entities,
+                                  progress=progress, progress_args=[smsg, start_upload, "📤 Uploading", file_basename])
+
         elif msg_type == "Animation":
-            sent_msg = await acc.send_animation(DB_CHANNEL, file)
+            await acc.send_animation(DB_CHANNEL, file)
+
         elif msg_type == "Sticker":
-            sent_msg = await acc.send_sticker(DB_CHANNEL, file)
+            await acc.send_sticker(DB_CHANNEL, file)
 
     except Exception as e:
         await smsg.edit_text(f"❌ Upload failed: {e}")
@@ -186,7 +208,7 @@ async def handle_private(message, chatid, msgid):
             pass
         await smsg.delete()
 
-
+# Message type detection
 def get_message_type(msg):
     if msg.document: return "Document"
     if msg.video: return "Video"
