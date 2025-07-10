@@ -5,7 +5,6 @@ import asyncio
 import os
 import json
 import time
-import math
 
 # Load configuration
 with open('config.json', 'r') as f:
@@ -30,7 +29,6 @@ else:
 
 ANIMATION_FRAMES = [".", "..", "..."]
 
-
 def humanbytes(size):
     if not size:
         return "0B"
@@ -42,13 +40,16 @@ def humanbytes(size):
         n += 1
     return f"{size:.2f} {units[n]}"
 
-
-def time_formatter(seconds):
-    seconds = int(seconds)
+def time_formatter(milliseconds: int) -> str:
+    seconds = int(milliseconds / 1000)
     minutes, seconds = divmod(seconds, 60)
     hours, minutes = divmod(minutes, 60)
-    return f"{hours}h {minutes}m {seconds}s"
-
+    if hours:
+        return f"{hours}h, {minutes}m"
+    elif minutes:
+        return f"{minutes}m, {seconds}s"
+    else:
+        return f"{seconds}s"
 
 def progress_bar(current, total):
     percent = current * 100 / total
@@ -56,7 +57,6 @@ def progress_bar(current, total):
     filled_length = int(percent / (100 / bar_length))
     bar = '▪️' * filled_length + '▫️' * (bar_length - filled_length)
     return bar, percent
-
 
 async def progress(current, total, message, start, status_type, anim_step=[0], last_edit_time=[0]):
     now = time.time()
@@ -76,70 +76,21 @@ async def progress(current, total, message, start, status_type, anim_step=[0], l
 Progress: {percent:.2f}%
 Size: {humanbytes(current)} of {humanbytes(total)}
 Speed: {humanbytes(speed)}/s
-ETA: {time_formatter(eta)}"""
+ETA: {time_formatter(eta * 1000)}"""
 
     try:
         await message.edit_text(text)
         last_edit_time[0] = now
     except FloodWait as e:
-        await handle_flood_wait(e, message, "while updating progress")
+        await asyncio.sleep(e.value)
     except:
         pass
 
     anim_step[0] += 1
 
-
-async def handle_flood_wait(e, message, context=""):
-    wait_time = e.value
-    formatted_time = time_formatter(wait_time)
-    try:
-        await message.reply_text(f"⏳ FloodWait encountered {context}: Waiting for {formatted_time}.")
-    except:
-        pass
-    await asyncio.sleep(wait_time + 2)
-
-
-def save_state(chatid, msgid):
-    with open('state.json', 'w') as f:
-        json.dump({'chatid': chatid, 'msgid': msgid}, f)
-
-
-def load_state():
-    if os.path.exists('state.json'):
-        with open('state.json', 'r') as f:
-            return json.load(f)
-    return None
-
-
-def clear_state():
-    if os.path.exists('state.json'):
-        os.remove('state.json')
-
-
-async def safe_edit(message, text):
-    try:
-        await message.edit_text(text)
-    except FloodWait as e:
-        await handle_flood_wait(e, message, "while editing message")
-
-
 @bot.on_message(filters.command(["start"]))
 async def start_command(client, message):
-    state = load_state()
-    if state:
-        try:
-            await message.reply_text(f"🔄 Resuming last task: Chat `{state['chatid']}`, Msg `{state['msgid']}`")
-        except FloodWait as e:
-            await handle_flood_wait(e, message, "while sending resume message")
-            return
-        await handle_private(message, state['chatid'], state['msgid'])
-        clear_state()
-    else:
-        try:
-            await message.reply_text("👋 Hi! Send me any Telegram post link, and I'll try to download and forward it.")
-        except FloodWait as e:
-            await handle_flood_wait(e, message, "while sending welcome message")
-
+    await message.reply_text("👋 Hi! Send me any Telegram post link, and I'll try to download and forward it.")
 
 @bot.on_message(filters.text)
 async def main_handler(client, message):
@@ -150,8 +101,6 @@ async def main_handler(client, message):
             return
         try:
             await acc.join_chat(text)
-        except FloodWait as e:
-            await handle_flood_wait(e, message, "while joining chat")
         except:
             pass
         return
@@ -171,7 +120,6 @@ async def main_handler(client, message):
                 chatid = int("-100" + parts[4])
                 if not acc:
                     return
-                save_state(chatid, msgid)
                 await handle_private(message, chatid, msgid)
             else:
                 username = parts[3]
@@ -180,72 +128,63 @@ async def main_handler(client, message):
                 except:
                     if not acc:
                         return
-                    save_state(username, msgid)
                     await handle_private(message, username, msgid)
 
             await asyncio.sleep(1)
 
-
 async def handle_private(message, chatid, msgid):
-    try:
-        msg = await acc.get_messages(chatid, msgid)
-    except FloodWait as e:
-        await handle_flood_wait(e, message, "while fetching message")
-        return
-
+    msg = await acc.get_messages(chatid, msgid)
     msg_type = get_message_type(msg)
 
     if msg_type == "Text":
-        try:
-            await acc.send_message(DB_CHANNEL, msg.text or "Empty Message", entities=msg.entities)
-        except FloodWait as e:
-            await handle_flood_wait(e, message, "while sending text")
+        await acc.send_message(DB_CHANNEL, msg.text or "Empty Message", entities=msg.entities)
         return
 
-    try:
-        smsg = await message.reply_text("📥 Downloading...")
-    except FloodWait as e:
-        await handle_flood_wait(e, message, "while sending download message")
+    if not msg.media:
+        await message.reply_text("❌ This message has no downloadable media.")
         return
+
+    smsg = await message.reply_text("📥 Downloading...")
 
     start_time = time.time()
     try:
         file = await acc.download_media(msg, progress=progress, progress_args=[smsg, start_time, "📥 Downloading"])
-    except FloodWait as e:
-        await handle_flood_wait(e, message, "while downloading")
+    except Exception as e:
+        await smsg.edit_text(f"❌ Failed to download: {e}")
         return
 
     if not file:
-        await safe_edit(smsg, "❌ Failed to download.")
+        await smsg.edit_text("❌ Failed to download.")
         return
 
     start_upload = time.time()
-    await safe_edit(smsg, "📤 Uploading...")
+    await smsg.edit_text("📤 Uploading...")
 
     try:
+        sent_msg = None
+
         if msg_type == "Document":
-            await acc.send_document(DB_CHANNEL, file, caption=msg.caption, caption_entities=msg.caption_entities,
-                                     progress=progress, progress_args=[smsg, start_upload, "📤 Uploading"])
+            sent_msg = await acc.send_document(DB_CHANNEL, file, caption=msg.caption, caption_entities=msg.caption_entities,
+                                               progress=progress, progress_args=[smsg, start_upload, "📤 Uploading"])
         elif msg_type == "Video":
-            await acc.send_video(DB_CHANNEL, file, caption=msg.caption, caption_entities=msg.caption_entities,
-                                  duration=msg.video.duration, width=msg.video.width, height=msg.video.height,
-                                  progress=progress, progress_args=[smsg, start_upload, "📤 Uploading"])
+            sent_msg = await acc.send_video(DB_CHANNEL, file, caption=msg.caption, caption_entities=msg.caption_entities,
+                                            duration=msg.video.duration, width=msg.video.width, height=msg.video.height,
+                                            progress=progress, progress_args=[smsg, start_upload, "📤 Uploading"])
         elif msg_type == "Audio":
-            await acc.send_audio(DB_CHANNEL, file, caption=msg.caption, caption_entities=msg.caption_entities,
-                                 progress=progress, progress_args=[smsg, start_upload, "📤 Uploading"])
+            sent_msg = await acc.send_audio(DB_CHANNEL, file, caption=msg.caption, caption_entities=msg.caption_entities,
+                                            progress=progress, progress_args=[smsg, start_upload, "📤 Uploading"])
         elif msg_type == "Photo":
-            await acc.send_photo(DB_CHANNEL, file, caption=msg.caption, caption_entities=msg.caption_entities)
+            sent_msg = await acc.send_photo(DB_CHANNEL, file, caption=msg.caption, caption_entities=msg.caption_entities)
         elif msg_type == "Voice":
-            await acc.send_voice(DB_CHANNEL, file, caption=msg.caption, caption_entities=msg.caption_entities,
-                                  progress=progress, progress_args=[smsg, start_upload, "📤 Uploading"])
+            sent_msg = await acc.send_voice(DB_CHANNEL, file, caption=msg.caption, caption_entities=msg.caption_entities,
+                                            progress=progress, progress_args=[smsg, start_upload, "📤 Uploading"])
         elif msg_type == "Animation":
-            await acc.send_animation(DB_CHANNEL, file)
+            sent_msg = await acc.send_animation(DB_CHANNEL, file)
         elif msg_type == "Sticker":
-            await acc.send_sticker(DB_CHANNEL, file)
-    except FloodWait as e:
-        await handle_flood_wait(e, message, "during upload")
+            sent_msg = await acc.send_sticker(DB_CHANNEL, file)
+
     except Exception as e:
-        await safe_edit(smsg, f"❌ Upload failed: {e}")
+        await smsg.edit_text(f"❌ Upload failed: {e}")
     finally:
         try:
             os.remove(file)
@@ -265,7 +204,5 @@ def get_message_type(msg):
     if msg.text: return "Text"
     return None
 
-
 bot.run()
-
 
