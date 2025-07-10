@@ -1,18 +1,19 @@
 import pyrogram
 from pyrogram import Client, filters
-from pyrogram.errors import FloodWait
+from pyrogram.errors import UserAlreadyParticipant, InviteHashExpired
 import asyncio
 import os
 import json
 import time
+import math
+from pathlib import Path
 
+# Load configuration
 with open('config.json', 'r') as f:
     DATA = json.load(f)
 
-
 def getenv(var):
     return os.environ.get(var) or DATA.get(var, None)
-
 
 bot_token = getenv("TOKEN")
 api_hash = getenv("HASH")
@@ -30,7 +31,6 @@ else:
 
 ANIMATION_FRAMES = [".", "..", "..."]
 
-
 def humanbytes(size):
     if not size:
         return "0B"
@@ -41,7 +41,6 @@ def humanbytes(size):
         size /= power
         n += 1
     return f"{size:.2f} {units[n]}"
-
 
 def time_formatter(milliseconds: int) -> str:
     seconds = int(milliseconds / 1000)
@@ -54,7 +53,6 @@ def time_formatter(milliseconds: int) -> str:
     else:
         return f"{seconds}s"
 
-
 def progress_bar(current, total):
     percent = current * 100 / total
     bar_length = 10
@@ -62,22 +60,18 @@ def progress_bar(current, total):
     bar = '▪️' * filled_length + '▫️' * (bar_length - filled_length)
     return bar, percent
 
-
-async def progress(current, total, message, start, status_type, filename="", anim_step=[0], last_edit_time=[0]):
+async def progress(current, total, message, start, status_type, filename="", anim_step=[0]):
     now = time.time()
     elapsed = now - start
     speed = current / elapsed if elapsed > 0 else 0
     eta = (total - current) / speed if speed > 0 else 0
-
-    if now - last_edit_time[0] < 3 and current != total:
-        return
 
     bar, percent = progress_bar(current, total)
     dots = ANIMATION_FRAMES[anim_step[0] % len(ANIMATION_FRAMES)]
 
     text = f"""{status_type} {dots}
 
-<b>{filename}</b>
+File: `{filename}`
 
 [{bar}]
 Progress: {percent:.2f}%
@@ -86,20 +80,15 @@ Speed: {humanbytes(speed)}/s
 ETA: {time_formatter(eta * 1000)}"""
 
     try:
-        await message.edit_text(text, parse_mode="html")
-        last_edit_time[0] = now
-    except FloodWait as e:
-        await asyncio.sleep(e.value)
-    except Exception:
+        await message.edit_text(text)
+    except:
         pass
 
     anim_step[0] += 1
 
-
 @bot.on_message(filters.command(["start"]))
 async def start_command(client, message):
-    await message.reply_text("🔄 Restarting...")
-
+    await message.reply_text("👋 Hi! Send me any Telegram post link, and I'll try to download and forward it.")
 
 @bot.on_message(filters.text)
 async def main_handler(client, message):
@@ -141,7 +130,6 @@ async def main_handler(client, message):
 
             await asyncio.sleep(1)
 
-
 async def handle_private(message, chatid, msgid):
     msg = await acc.get_messages(chatid, msgid)
     msg_type = get_message_type(msg)
@@ -153,13 +141,9 @@ async def handle_private(message, chatid, msgid):
     smsg = await message.reply_text("📥 Downloading...")
 
     start_time = time.time()
-    filename = msg.file_name or "Unknown File"
+    filename = msg.file_name or "Unknown"
 
-    file = await acc.download_media(
-        msg,
-        progress=progress,
-        progress_args=[smsg, start_time, "📥 Downloading", filename]
-    )
+    file = await acc.download_media(msg, progress=progress, progress_args=[smsg, start_time, "📥 Downloading", filename])
 
     if not file:
         await smsg.edit_text("❌ Failed to download.")
@@ -168,21 +152,26 @@ async def handle_private(message, chatid, msgid):
     start_upload = time.time()
     await smsg.edit_text("📤 Uploading...")
 
+    file_basename = Path(file).name
+
     try:
         sent_msg = None
 
-        progress_args = [smsg, start_upload, "📤 Uploading", filename]
-
         if msg_type == "Document":
-            sent_msg = await acc.send_document(DB_CHANNEL, file, caption=msg.caption, caption_entities=msg.caption_entities, progress=progress, progress_args=progress_args)
+            sent_msg = await acc.send_document(DB_CHANNEL, file, caption=msg.caption, caption_entities=msg.caption_entities,
+                                               progress=progress, progress_args=[smsg, start_upload, "📤 Uploading", file_basename])
         elif msg_type == "Video":
-            sent_msg = await acc.send_video(DB_CHANNEL, file, caption=msg.caption, caption_entities=msg.caption_entities, duration=msg.video.duration, width=msg.video.width, height=msg.video.height, progress=progress, progress_args=progress_args)
+            sent_msg = await acc.send_video(DB_CHANNEL, file, caption=msg.caption, caption_entities=msg.caption_entities,
+                                            duration=msg.video.duration, width=msg.video.width, height=msg.video.height,
+                                            progress=progress, progress_args=[smsg, start_upload, "📤 Uploading", file_basename])
         elif msg_type == "Audio":
-            sent_msg = await acc.send_audio(DB_CHANNEL, file, caption=msg.caption, caption_entities=msg.caption_entities, progress=progress, progress_args=progress_args)
+            sent_msg = await acc.send_audio(DB_CHANNEL, file, caption=msg.caption, caption_entities=msg.caption_entities,
+                                            progress=progress, progress_args=[smsg, start_upload, "📤 Uploading", file_basename])
         elif msg_type == "Photo":
             sent_msg = await acc.send_photo(DB_CHANNEL, file, caption=msg.caption, caption_entities=msg.caption_entities)
         elif msg_type == "Voice":
-            sent_msg = await acc.send_voice(DB_CHANNEL, file, caption=msg.caption, caption_entities=msg.caption_entities, progress=progress, progress_args=progress_args)
+            sent_msg = await acc.send_voice(DB_CHANNEL, file, caption=msg.caption, caption_entities=msg.caption_entities,
+                                             progress=progress, progress_args=[smsg, start_upload, "📤 Uploading", file_basename])
         elif msg_type == "Animation":
             sent_msg = await acc.send_animation(DB_CHANNEL, file)
         elif msg_type == "Sticker":
@@ -208,6 +197,5 @@ def get_message_type(msg):
     if msg.sticker: return "Sticker"
     if msg.text: return "Text"
     return None
-
 
 bot.run()
