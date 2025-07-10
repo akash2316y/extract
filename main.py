@@ -1,13 +1,12 @@
+
 import pyrogram
 from pyrogram import Client, filters
-from pyrogram.errors import UserAlreadyParticipant, InviteHashExpired
-import asyncio
-import os
-import json
 import time
-import math
+import os
+import threading
+import json
+from math import log, floor
 
-# Load configuration
 with open('config.json', 'r') as f:
     DATA = json.load(f)
 
@@ -17,179 +16,151 @@ def getenv(var):
 bot_token = getenv("TOKEN")
 api_hash = getenv("HASH")
 api_id = getenv("ID")
-DB_CHANNEL = int(getenv("DB_CHANNEL"))
-
 bot = Client("mybot", api_id=api_id, api_hash=api_hash, bot_token=bot_token)
 
 ss = getenv("STRING")
-if ss:
+if ss is not None:
     acc = Client("myacc", api_id=api_id, api_hash=api_hash, session_string=ss)
     acc.start()
 else:
     acc = None
 
-ANIMATION_FRAMES = [".", "..", "..."]
+DB_CHANNEL = -1001234567890  # Replace with your DB channel ID
 
-def humanbytes(size):
-    if not size:
+def human_readable(size):
+    if size == 0:
         return "0B"
-    power = 2**10
-    n = 0
-    units = ["B", "KiB", "MiB", "GiB", "TiB"]
-    while size >= power and n < len(units) - 1:
-        size /= power
-        n += 1
-    return f"{size:.2f} {units[n]}"
+    units = ['B', 'KiB', 'MiB', 'GiB', 'TiB']
+    i = int(floor(log(size, 1024)))
+    p = pow(1024, i)
+    s = round(size / p, 2)
+    return f"{s} {units[i]}"
 
-def time_formatter(milliseconds: int) -> str:
-    seconds = int(milliseconds / 1000)
-    minutes, seconds = divmod(seconds, 60)
-    hours, minutes = divmod(minutes, 60)
-    if hours:
-        return f"{hours}h, {minutes}m"
-    elif minutes:
-        return f"{minutes}m, {seconds}s"
-    else:
-        return f"{seconds}s"
-
-def progress_bar(current, total):
-    percent = current * 100 / total
-    bar_length = 10
-    filled_length = int(percent / (100 / bar_length))
-    bar = '▪️' * filled_length + '▫️' * (bar_length - filled_length)
-    return bar, percent
-
-async def progress(current, total, message, start, status_type, anim_step=[0]):
+def progress(current, total, message, type, start_time, filename=""):
     now = time.time()
-    elapsed = now - start
-    speed = current / elapsed if elapsed > 0 else 0
+    diff = now - start_time or 1
+    percentage = current * 100 / total
+    speed = current / diff
     eta = (total - current) / speed if speed > 0 else 0
+    bar = '▪️' * int(10 * percentage // 100) + '▫️' * (10 - int(10 * percentage // 100))
+    text = (
+        f"**📄 File:** `{filename}`\n"
+        f"📥 {'Downloading' if type == 'down' else 'Uploading'} ...\n"
+        f"[{bar}]\n"
+        f"Progress: `{percentage:.2f}%`\n"
+        f"Size: `{human_readable(current)} of {human_readable(total)}`\n"
+        f"Speed: `{human_readable(speed)}/s`\n"
+        f"ETA: `{int(eta // 60)}m {int(eta % 60)}s`"
+    )
+    with open(f'{message.id}{type}status.txt', "w") as f:
+        f.write(text)
 
-    bar, percent = progress_bar(current, total)
-    dots = ANIMATION_FRAMES[anim_step[0] % len(ANIMATION_FRAMES)]
-
-    text = f"""{status_type} {dots}
-
-[{bar}]
-Progress: {percent:.2f}%
-Size: {humanbytes(current)} of {humanbytes(total)}
-Speed: {humanbytes(speed)}/s
-ETA: {time_formatter(eta * 1000)}"""
-
-    try:
-        await message.edit_text(text)
-    except:
-        pass
-
-    anim_step[0] += 1
-
-@bot.on_message(filters.command(["start"]))
-async def start_command(client, message):
-    await message.reply_text("👋 Hi! Send me any Telegram post link, and I'll try to download and forward it.")
-
-@bot.on_message(filters.text)
-async def main_handler(client, message):
-    text = message.text
-
-    if ("https://t.me/+" in text) or ("https://t.me/joinchat/" in text):
-        if not acc:
-            return
+def status_updater(statusfile, message):
+    while not os.path.exists(statusfile):
+        time.sleep(2)
+    while os.path.exists(statusfile):
+        with open(statusfile, "r") as f:
+            txt = f.read()
         try:
-            await acc.join_chat(text)
+            bot.edit_message_text(message.chat.id, message.id, txt)
+            time.sleep(5)
         except:
-            pass
-        return
-
-    if "https://t.me/" in text:
-        parts = text.split("/")
-        temp = parts[-1].replace("?single", "").split("-")
-
-        try:
-            from_id = int(temp[0].strip())
-            to_id = int(temp[1].strip())
-        except:
-            from_id = to_id = int(temp[0].strip())
-
-        for msgid in range(from_id, to_id + 1):
-            if "https://t.me/c/" in text:
-                chatid = int("-100" + parts[4])
-                if not acc:
-                    return
-                await handle_private(message, chatid, msgid)
-            else:
-                username = parts[3]
-                try:
-                    msg = await bot.get_messages(username, msgid)
-                except:
-                    if not acc:
-                        return
-                    await handle_private(message, username, msgid)
-
-            await asyncio.sleep(1)
-
-async def handle_private(message, chatid, msgid):
-    msg = await acc.get_messages(chatid, msgid)
-    msg_type = get_message_type(msg)
-
-    if msg_type == "Text":
-        await acc.send_message(DB_CHANNEL, msg.text or "Empty Message", entities=msg.entities)
-        return
-
-    smsg = await message.reply_text("📥 Downloading...")
-
-    start_time = time.time()
-    file = await acc.download_media(msg, progress=progress, progress_args=[smsg, start_time, "📥 Downloading"])
-
-    if not file:
-        await smsg.edit_text("❌ Failed to download.")
-        return
-
-    start_upload = time.time()
-    await smsg.edit_text("📤 Uploading...")
-
-    try:
-        sent_msg = None
-
-        if msg_type == "Document":
-            sent_msg = await acc.send_document(DB_CHANNEL, file, caption=msg.caption, caption_entities=msg.caption_entities,
-                                               progress=progress, progress_args=[smsg, start_upload, "📤 Uploading"])
-        elif msg_type == "Video":
-            sent_msg = await acc.send_video(DB_CHANNEL, file, caption=msg.caption, caption_entities=msg.caption_entities,
-                                            duration=msg.video.duration, width=msg.video.width, height=msg.video.height,
-                                            progress=progress, progress_args=[smsg, start_upload, "📤 Uploading"])
-        elif msg_type == "Audio":
-            sent_msg = await acc.send_audio(DB_CHANNEL, file, caption=msg.caption, caption_entities=msg.caption_entities,
-                                            progress=progress, progress_args=[smsg, start_upload, "📤 Uploading"])
-        elif msg_type == "Photo":
-            sent_msg = await acc.send_photo(DB_CHANNEL, file, caption=msg.caption, caption_entities=msg.caption_entities)
-        elif msg_type == "Voice":
-            sent_msg = await acc.send_voice(DB_CHANNEL, file, caption=msg.caption, caption_entities=msg.caption_entities,
-                                            progress=progress, progress_args=[smsg, start_upload, "📤 Uploading"])
-        elif msg_type == "Animation":
-            sent_msg = await acc.send_animation(DB_CHANNEL, file)
-        elif msg_type == "Sticker":
-            sent_msg = await acc.send_sticker(DB_CHANNEL, file)
-
-    except Exception as e:
-        await smsg.edit_text(f"❌ Upload failed: {e}")
-    finally:
-        try:
-            os.remove(file)
-        except:
-            pass
-        await smsg.delete()
-
+            time.sleep(3)
 
 def get_message_type(msg):
     if msg.document: return "Document"
     if msg.video: return "Video"
-    if msg.audio: return "Audio"
-    if msg.photo: return "Photo"
-    if msg.voice: return "Voice"
     if msg.animation: return "Animation"
     if msg.sticker: return "Sticker"
+    if msg.voice: return "Voice"
+    if msg.audio: return "Audio"
+    if msg.photo: return "Photo"
     if msg.text: return "Text"
-    return None
+
+def handle_single_post(message, chat_username, msg_id):
+    msg = acc.get_messages(chat_username, msg_id)
+    msg_type = get_message_type(msg)
+
+    if msg_type == "Text":
+        acc.send_message(DB_CHANNEL, msg.text, entities=msg.entities)
+        return True
+
+    smsg = bot.send_message(message.chat.id, f"__Processing post {chat_username}/{msg_id}...__", reply_to_message_id=message.id)
+    threading.Thread(target=lambda: status_updater(f'{message.id}downstatus.txt', smsg), daemon=True).start()
+
+    start_time = time.time()
+    filename = msg.file_name if hasattr(msg, 'file_name') and msg.file_name else "file"
+    file = acc.download_media(msg, progress=progress, progress_args=[message, "down", start_time, filename])
+
+    os.remove(f'{message.id}downstatus.txt')
+
+    threading.Thread(target=lambda: status_updater(f'{message.id}upstatus.txt', smsg), daemon=True).start()
+
+    try:
+        kwargs = {'caption': msg.caption, 'caption_entities': msg.caption_entities} if msg.caption else {}
+        if msg_type == "Document":
+            acc.send_document(DB_CHANNEL, file, **kwargs)
+        elif msg_type == "Video":
+            acc.send_video(DB_CHANNEL, file, **kwargs)
+        elif msg_type == "Photo":
+            acc.send_photo(DB_CHANNEL, file, **kwargs)
+        elif msg_type == "Audio":
+            acc.send_audio(DB_CHANNEL, file, **kwargs)
+        elif msg_type == "Voice":
+            acc.send_voice(DB_CHANNEL, file, **kwargs)
+        elif msg_type == "Sticker":
+            acc.send_sticker(DB_CHANNEL, file)
+        elif msg_type == "Animation":
+            acc.send_animation(DB_CHANNEL, file)
+    except Exception as e:
+        bot.send_message(message.chat.id, f"❌ Failed: {e}", reply_to_message_id=message.id)
+        return False
+
+    os.remove(file)
+    if os.path.exists(f'{message.id}upstatus.txt'):
+        os.remove(f'{message.id}upstatus.txt')
+    bot.delete_messages(message.chat.id, [smsg.id])
+    return True
+
+def batch_handler(message, links):
+    success = 0
+    fail = 0
+    for link in links:
+        try:
+            parts = link.strip().split('/')
+            chat_username = parts[-2]
+            id_part = parts[-1]
+
+            if '-' in id_part:
+                start_id, end_id = map(int, id_part.split('-'))
+                for mid in range(start_id, end_id + 1):
+                    if handle_single_post(message, chat_username, mid):
+                        success += 1
+                    else:
+                        fail += 1
+            else:
+                msg_id = int(id_part)
+                if handle_single_post(message, chat_username, msg_id):
+                    success += 1
+                else:
+                    fail += 1
+
+        except Exception as e:
+            fail += 1
+            bot.send_message(message.chat.id, f"❗ Error: {e}\nLink: {link}", reply_to_message_id=message.id)
+
+    bot.send_message(message.chat.id, f"✅ Batch Completed\n✔️ Success: {success}\n❌ Failed: {fail}", reply_to_message_id=message.id)
+
+@bot.on_message(filters.command("start"))
+async def start(client, message):
+    await message.reply_text("Send `/save https://t.me/channel/10` for single post.\nSend `/save https://t.me/channel/10-15` for batch save to DB channel.", reply_to_message_id=message.id)
+
+@bot.on_message(filters.command("save"))
+async def save(client, message):
+    if len(message.command) < 2:
+        await message.reply_text("❗ Provide at least one link.")
+        return
+    links = message.command[1:]
+    threading.Thread(target=batch_handler, args=(message, links), daemon=True).start()
 
 bot.run()
-
