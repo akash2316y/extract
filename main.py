@@ -1,11 +1,10 @@
 import os
 import json
 import time
-import math
 import asyncio
 from pyrogram import Client, filters
 
-# Load configuration
+# Load config
 with open('config.json', 'r') as f:
     DATA = json.load(f)
 
@@ -27,8 +26,6 @@ if acc:
 ANIMATION_FRAMES = [".", "..", "..."]
 
 def humanbytes(size):
-    if not size:
-        return "0B"
     power = 2**10
     n = 0
     units = ["B", "KiB", "MiB", "GiB", "TiB"]
@@ -37,8 +34,8 @@ def humanbytes(size):
         n += 1
     return f"{size:.2f} {units[n]}"
 
-def time_formatter(milliseconds: int) -> str:
-    seconds = int(milliseconds / 1000)
+def time_formatter(ms):
+    seconds = int(ms / 1000)
     minutes, seconds = divmod(seconds, 60)
     hours, minutes = divmod(minutes, 60)
     if hours:
@@ -50,46 +47,42 @@ def time_formatter(milliseconds: int) -> str:
 
 def progress_bar(current, total):
     percent = current * 100 / total if total else 0
-    bar_length = 12
-    filled_length = int(percent / (100 / bar_length))
-    bar = '▪️' * filled_length + '▫️' * (bar_length - filled_length)
+    filled = int(percent / 8.33)  # 12 bars
+    bar = '▪️' * filled + '▫️' * (12 - filled)
     return bar, percent
 
-async def progress(current, total, message, start, status_type, filename=None, anim_step=[0], last_update=[0]):
+async def progress(current, total, message, start, status, filename=None, anim_step=[0], last_update=[0]):
     now = time.time()
+    if now - last_update[0] < 3 and current < total:
+        return
+    last_update[0] = now
+
     elapsed = now - start
     speed = current / elapsed if elapsed > 0 else 0
     eta = (total - current) / speed if speed > 0 else 0
     bar, percent = progress_bar(current, total)
     dots = ANIMATION_FRAMES[anim_step[0] % len(ANIMATION_FRAMES)]
+    anim_step[0] += 1
 
-    # Only update every 3 seconds or when complete
-    if now - last_update[0] < 3 and current < total:
-        return
-    last_update[0] = now
-
-    text = f"""📄 <b>{filename or "Processing..."}</b>\n
-{status_type} {dots}
+    text = f"""📄 <b>{filename or "Processing"}</b>\n
+{status} {dots}
 
 [{bar}]
-Progress: <b>{percent:.2f}%</b>
-Size: <b>{humanbytes(current)}</b> of <b>{humanbytes(total)}</b>
-Speed: <b>{humanbytes(speed)}/s</b>
-ETA: <b>{time_formatter(eta * 1000)}</b>"""
+<b>{percent:.2f}%</b> of <b>{humanbytes(total)}</b>
+<b>Speed:</b> {humanbytes(speed)}/s
+<b>ETA:</b> {time_formatter(eta * 1000)}"""
 
     try:
         await message.edit_text(text, parse_mode="html")
     except:
         pass
 
-    anim_step[0] += 1
-
 @bot.on_message(filters.command("start"))
-async def start_command(client, message):
-    await message.reply_text("👋 Hi! Send me any Telegram post link, and I'll try to download and forward it with progress.")
+async def start_cmd(client, message):
+    await message.reply_text("👋 Send me any Telegram post link to download and forward it with progress.")
 
 @bot.on_message(filters.text)
-async def main_handler(client, message):
+async def text_handler(client, message):
     text = message.text
 
     if ("https://t.me/+" in text) or ("https://t.me/joinchat/" in text):
@@ -112,100 +105,70 @@ async def main_handler(client, message):
             from_id = to_id = int(temp[0].strip())
 
         for msgid in range(from_id, to_id + 1):
-            if "https://t.me/c/" in text:
-                chatid = int("-100" + parts[4])
-                if not acc:
-                    return
-                await handle_private(message, chatid, msgid)
-            else:
-                username = parts[3]
-                try:
-                    msg = await bot.get_messages(username, msgid)
-                except:
-                    if not acc:
-                        return
-                    await handle_private(message, username, msgid)
-
+            chatid = int("-100" + parts[4]) if "https://t.me/c/" in text else parts[3]
+            await process_message(message, chatid, msgid)
             await asyncio.sleep(1)
 
-async def handle_private(message, chatid, msgid):
+async def process_message(message, chatid, msgid):
     try:
         msg = await acc.get_messages(chatid, msgid)
     except Exception as e:
-        await message.reply_text(f"❌ Failed to fetch message: {e}")
+        await message.reply_text(f"❌ Failed to fetch message:\n<code>{e}</code>")
         return
 
-    msg_type = get_message_type(msg)
-    file_name = None
-
-    if msg_type == "Text":
-        await acc.send_message(DB_CHANNEL, msg.text or "Empty Message", entities=msg.entities)
-        return
-
-    smsg = await message.reply_text(f"📥 Downloading...")
+    msg_type = detect_type(msg)
+    file_name = get_file_name(msg)
+    smsg = await message.reply_text("📥 Downloading...")
 
     start_time = time.time()
-    file = None
-    try:
-        if msg.document:
-            file_name = msg.document.file_name
-        elif msg.video:
-            file_name = msg.video.file_name
-        elif msg.audio:
-            file_name = msg.audio.file_name
-        elif msg.photo:
-            file_name = "Photo.jpg"
-        elif msg.voice:
-            file_name = "Voice.ogg"
-        elif msg.animation:
-            file_name = msg.animation.file_name
-        elif msg.sticker:
-            file_name = "Sticker.webp"
+    file_path = None
 
-        file = await acc.download_media(
+    try:
+        file_path = await acc.download_media(
             msg,
             progress=progress,
             progress_args=[smsg, start_time, "📥 Downloading", file_name]
         )
 
-        if not file:
-            await smsg.edit_text("❌ Failed to download.")
+        if not file_path:
+            await smsg.edit_text("❌ Download failed.")
             return
 
         start_upload = time.time()
         await smsg.edit_text("📤 Uploading...")
 
         if msg_type == "Document":
-            await acc.send_document(DB_CHANNEL, file, caption=msg.caption, caption_entities=msg.caption_entities,
+            await acc.send_document(DB_CHANNEL, file_path, caption=msg.caption, caption_entities=msg.caption_entities,
                                     progress=progress, progress_args=[smsg, start_upload, "📤 Uploading", file_name])
         elif msg_type == "Video":
-            await acc.send_video(DB_CHANNEL, file, caption=msg.caption, caption_entities=msg.caption_entities,
+            await acc.send_video(DB_CHANNEL, file_path, caption=msg.caption, caption_entities=msg.caption_entities,
                                  duration=msg.video.duration, width=msg.video.width, height=msg.video.height,
                                  progress=progress, progress_args=[smsg, start_upload, "📤 Uploading", file_name])
         elif msg_type == "Audio":
-            await acc.send_audio(DB_CHANNEL, file, caption=msg.caption, caption_entities=msg.caption_entities,
+            await acc.send_audio(DB_CHANNEL, file_path, caption=msg.caption, caption_entities=msg.caption_entities,
                                  progress=progress, progress_args=[smsg, start_upload, "📤 Uploading", file_name])
         elif msg_type == "Photo":
-            await acc.send_photo(DB_CHANNEL, file, caption=msg.caption, caption_entities=msg.caption_entities)
+            await acc.send_photo(DB_CHANNEL, file_path, caption=msg.caption, caption_entities=msg.caption_entities)
         elif msg_type == "Voice":
-            await acc.send_voice(DB_CHANNEL, file, caption=msg.caption, caption_entities=msg.caption_entities,
+            await acc.send_voice(DB_CHANNEL, file_path, caption=msg.caption, caption_entities=msg.caption_entities,
                                  progress=progress, progress_args=[smsg, start_upload, "📤 Uploading", file_name])
         elif msg_type == "Animation":
-            await acc.send_animation(DB_CHANNEL, file)
+            await acc.send_animation(DB_CHANNEL, file_path)
         elif msg_type == "Sticker":
-            await acc.send_sticker(DB_CHANNEL, file)
+            await acc.send_sticker(DB_CHANNEL, file_path)
+
+        await smsg.delete()  # ✅ Success: delete progress
 
     except Exception as e:
-        await smsg.edit_text(f"❌ Upload failed: {e}")
+        await smsg.edit_text(f"❌ Error:\n<code>{e}</code>")
     finally:
-        if file:
+        if file_path and os.path.exists(file_path):
             try:
-                os.remove(file)
+                os.remove(file_path)
             except:
                 pass
-        await smsg.delete()
 
-def get_message_type(msg):
+def detect_type(msg):
     if msg.document: return "Document"
     if msg.video: return "Video"
     if msg.audio: return "Audio"
@@ -213,9 +176,16 @@ def get_message_type(msg):
     if msg.voice: return "Voice"
     if msg.animation: return "Animation"
     if msg.sticker: return "Sticker"
-    if msg.text: return "Text"
+    return "Text"
+
+def get_file_name(msg):
+    if msg.document: return msg.document.file_name
+    if msg.video: return msg.video.file_name
+    if msg.audio: return msg.audio.file_name
+    if msg.animation: return msg.animation.file_name
+    if msg.photo: return "Photo.jpg"
+    if msg.voice: return "Voice.ogg"
+    if msg.sticker: return "Sticker.webp"
     return None
 
 bot.run()
-
-
