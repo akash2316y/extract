@@ -1,31 +1,29 @@
-import pyrogram
 from pyrogram import Client, filters
 import asyncio
 import os
 import json
 import time
 
-# Load configuration
-with open('config.json', 'r') as f:
+# Load config
+with open('config.json') as f:
     DATA = json.load(f)
 
-def getenv(var):
-    return os.environ.get(var) or DATA.get(var, None)
+def getenv(key):
+    return os.environ.get(key) or DATA.get(key)
 
-bot_token = getenv("TOKEN")
+api_id = int(getenv("ID"))
 api_hash = getenv("HASH")
-api_id = getenv("ID")
-DB_CHANNEL = int(getenv("DB_CHANNEL"))
+bot_token = getenv("TOKEN")
+DB_CHANNEL = int(getenv("DB_CHANNEL"))  # Make sure this is -100xxxxxxxxxx
 
 bot = Client("mybot", api_id=api_id, api_hash=api_hash, bot_token=bot_token)
 
 ss = getenv("STRING")
-if ss:
-    acc = Client("myacc", api_id=api_id, api_hash=api_hash, session_string=ss)
+acc = Client("myacc", api_id=api_id, api_hash=api_hash, session_string=ss) if ss else None
+if acc:
     acc.start()
-else:
-    acc = None
 
+# Helpers
 ANIMATION_FRAMES = [".", "..", "..."]
 
 def humanbytes(size):
@@ -39,29 +37,24 @@ def humanbytes(size):
         n += 1
     return f"{size:.2f} {units[n]}"
 
-def time_formatter(milliseconds: int) -> str:
-    seconds = int(milliseconds / 1000)
-    minutes, seconds = divmod(seconds, 60)
-    hours, minutes = divmod(minutes, 60)
-    if hours:
-        return f"{hours}h, {minutes}m"
-    elif minutes:
-        return f"{minutes}m, {seconds}s"
-    else:
-        return f"{seconds}s"
+def time_formatter(ms):
+    seconds = int(ms / 1000)
+    m, s = divmod(seconds, 60)
+    h, m = divmod(m, 60)
+    return f"{h}h {m}m" if h else f"{m}m {s}s" if m else f"{s}s"
 
 def progress_bar(current, total):
     percent = current * 100 / total
-    bar_length = 10
-    filled_length = int(percent / (100 / bar_length))
-    bar = '▪️' * filled_length + '▫️' * (bar_length - filled_length)
+    bar_len = 10
+    filled = int(percent / (100 / bar_len))
+    bar = '▪️' * filled + '▫️' * (bar_len - filled)
     return bar, percent
 
 async def progress(current, total, message, start, status_type, anim_step):
     now = time.time()
     elapsed = now - start
-    speed = current / elapsed if elapsed > 0 else 0
-    eta = (total - current) / speed if speed > 0 else 0
+    speed = current / elapsed if elapsed else 0
+    eta = (total - current) / speed if speed else 0
 
     bar, percent = progress_bar(current, total)
     dots = ANIMATION_FRAMES[anim_step[0] % len(ANIMATION_FRAMES)]
@@ -90,115 +83,6 @@ async def update_progress_every_3s(message, total, start, status_type, current_f
             break
         await asyncio.sleep(3)
 
-@bot.on_message(filters.command(["start"]))
-async def start_command(client, message):
-    await message.reply_text("👋 Hi! Send me any Telegram post link, and I'll try to download and forward it.")
-
-@bot.on_message(filters.text)
-async def main_handler(client, message):
-    text = message.text
-
-    if ("https://t.me/+" in text) or ("https://t.me/joinchat/" in text):
-        if not acc:
-            return
-        try:
-            await acc.join_chat(text)
-        except:
-            pass
-        return
-
-    if "https://t.me/" in text:
-        parts = text.split("/")
-        temp = parts[-1].replace("?single", "").split("-")
-
-        try:
-            from_id = int(temp[0].strip())
-            to_id = int(temp[1].strip())
-        except:
-            from_id = to_id = int(temp[0].strip())
-
-        for msgid in range(from_id, to_id + 1):
-            if "https://t.me/c/" in text:
-                chatid = int("-100" + parts[4])
-                if not acc:
-                    return
-                await handle_private(message, chatid, msgid)
-            else:
-                username = parts[3]
-                try:
-                    msg = await bot.get_messages(username, msgid)
-                except:
-                    if not acc:
-                        return
-                    await handle_private(message, username, msgid)
-
-            await asyncio.sleep(1)
-
-async def handle_private(message, chatid, msgid):
-    msg = await acc.get_messages(chatid, msgid)
-    msg_type = get_message_type(msg)
-
-    if msg_type == "Text":
-        await acc.send_message(DB_CHANNEL, msg.text or "Empty Message", entities=msg.entities)
-        return
-
-    smsg = await message.reply_text("📥 Downloading...")
-
-    start_time = time.time()
-    current_downloaded = [0]
-
-    async def download_progress(current, total):
-        current_downloaded[0] = current  # Update latest downloaded size
-
-    # Start background progress updater
-    progress_task = asyncio.create_task(update_progress_every_3s(smsg, msg.document.file_size if msg.document else msg.video.file_size if msg.video else 0, start_time, "📥 Downloading", lambda: current_downloaded[0]))
-
-    file = await acc.download_media(msg, progress=download_progress)
-    current_downloaded[0] = os.path.getsize(file) if file and os.path.exists(file) else current_downloaded[0]
-
-    progress_task.cancel()
-
-    if not file:
-        await smsg.edit_text("❌ Failed to download.")
-        return
-
-    start_upload = time.time()
-    await smsg.edit_text("📤 Uploading...")
-    current_uploaded = [0]
-
-    async def upload_progress(current, total):
-        current_uploaded[0] = current
-
-    progress_task_upload = asyncio.create_task(update_progress_every_3s(smsg, os.path.getsize(file), start_upload, "📤 Uploading", lambda: current_uploaded[0]))
-
-    try:
-        sent_msg = None
-
-        if msg_type == "Document":
-            sent_msg = await acc.send_document(DB_CHANNEL, file, caption=msg.caption, caption_entities=msg.caption_entities, progress=upload_progress)
-        elif msg_type == "Video":
-            sent_msg = await acc.send_video(DB_CHANNEL, file, caption=msg.caption, caption_entities=msg.caption_entities, duration=msg.video.duration, width=msg.video.width, height=msg.video.height, progress=upload_progress)
-        elif msg_type == "Audio":
-            sent_msg = await acc.send_audio(DB_CHANNEL, file, caption=msg.caption, caption_entities=msg.caption_entities, progress=upload_progress)
-        elif msg_type == "Photo":
-            sent_msg = await acc.send_photo(DB_CHANNEL, file, caption=msg.caption, caption_entities=msg.caption_entities)
-        elif msg_type == "Voice":
-            sent_msg = await acc.send_voice(DB_CHANNEL, file, caption=msg.caption, caption_entities=msg.caption_entities, progress=upload_progress)
-        elif msg_type == "Animation":
-            sent_msg = await acc.send_animation(DB_CHANNEL, file)
-        elif msg_type == "Sticker":
-            sent_msg = await acc.send_sticker(DB_CHANNEL, file)
-
-    except Exception as e:
-        await smsg.edit_text(f"❌ Upload failed: {e}")
-    finally:
-        progress_task_upload.cancel()
-        try:
-            os.remove(file)
-        except:
-            pass
-        await smsg.delete()
-
 def get_message_type(msg):
     if msg.document: return "Document"
     if msg.video: return "Video"
@@ -210,4 +94,123 @@ def get_message_type(msg):
     if msg.text: return "Text"
     return None
 
+@bot.on_message(filters.command("start"))
+async def start_handler(client, message):
+    await message.reply_text("👋 Send me any Telegram post link (public/private).")
+
+@bot.on_message(filters.text)
+async def link_handler(client, message):
+    text = message.text
+
+    if ("https://t.me/+" in text) or ("joinchat/" in text):
+        if acc:
+            try:
+                await acc.join_chat(text)
+                await message.reply("✅ Joined.")
+            except Exception as e:
+                await message.reply(f"❌ Join error: {e}")
+        return
+
+    if "https://t.me/" not in text:
+        await message.reply("⚠️ Please send a valid Telegram post link.")
+        return
+
+    parts = text.split("/")
+    temp = parts[-1].replace("?single", "").split("-")
+
+    try:
+        from_id = int(temp[0].strip())
+        to_id = int(temp[1].strip())
+    except:
+        from_id = to_id = int(temp[0].strip())
+
+    for msgid in range(from_id, to_id + 1):
+        if "https://t.me/c/" in text:
+            chat_id = int("-100" + parts[4])
+            if not acc:
+                return await message.reply("❌ No user session (`acc`) found.")
+            await handle_private(message, chat_id, msgid)
+        else:
+            username = parts[3]
+            try:
+                msg = await bot.get_messages(username, msgid)
+            except:
+                if not acc:
+                    return await message.reply("❌ No user session (`acc`) found.")
+                await handle_private(message, username, msgid)
+
+        await asyncio.sleep(1)
+
+async def handle_private(message, chat_id, msg_id):
+    try:
+        msg = await acc.get_messages(chat_id, msg_id)
+    except Exception as e:
+        return await message.reply(f"❌ Failed to fetch message: {e}")
+
+    msg_type = get_message_type(msg)
+
+    if msg_type == "Text":
+        try:
+            await acc.send_message(DB_CHANNEL, msg.text or "Empty", entities=msg.entities)
+        except Exception as e:
+            return await message.reply(f"❌ Failed to send message: {e}")
+        return
+
+    smsg = await message.reply("📥 Downloading...")
+    start = time.time()
+    current_downloaded = [0]
+
+    async def dl_cb(current, total):
+        current_downloaded[0] = current
+
+    file = None
+    progress_task = asyncio.create_task(update_progress_every_3s(smsg, msg.document.file_size if msg.document else msg.video.file_size if msg.video else 0, start, "📥 Downloading", lambda: current_downloaded[0]))
+    
+    try:
+        file = await acc.download_media(msg, progress=dl_cb)
+    except Exception as e:
+        progress_task.cancel()
+        return await smsg.edit(f"❌ Download failed: {e}")
+
+    progress_task.cancel()
+
+    if not file or not os.path.exists(file):
+        return await smsg.edit("❌ File download failed.")
+
+    current_uploaded = [0]
+
+    async def ul_cb(current, total):
+        current_uploaded[0] = current
+
+    try:
+        await smsg.edit("📤 Uploading...")
+        upload_task = asyncio.create_task(update_progress_every_3s(smsg, os.path.getsize(file), time.time(), "📤 Uploading", lambda: current_uploaded[0]))
+
+        sent = None
+        if msg_type == "Document":
+            sent = await acc.send_document(DB_CHANNEL, file, caption=msg.caption, caption_entities=msg.caption_entities, progress=ul_cb)
+        elif msg_type == "Video":
+            sent = await acc.send_video(DB_CHANNEL, file, caption=msg.caption, caption_entities=msg.caption_entities, duration=msg.video.duration, width=msg.video.width, height=msg.video.height, progress=ul_cb)
+        elif msg_type == "Audio":
+            sent = await acc.send_audio(DB_CHANNEL, file, caption=msg.caption, caption_entities=msg.caption_entities, progress=ul_cb)
+        elif msg_type == "Photo":
+            sent = await acc.send_photo(DB_CHANNEL, file, caption=msg.caption, caption_entities=msg.caption_entities)
+        elif msg_type == "Voice":
+            sent = await acc.send_voice(DB_CHANNEL, file, caption=msg.caption, caption_entities=msg.caption_entities, progress=ul_cb)
+        elif msg_type == "Animation":
+            sent = await acc.send_animation(DB_CHANNEL, file)
+        elif msg_type == "Sticker":
+            sent = await acc.send_sticker(DB_CHANNEL, file)
+
+    except Exception as e:
+        await smsg.edit(f"❌ Upload failed: {e}")
+    finally:
+        upload_task.cancel()
+        try:
+            os.remove(file)
+        except:
+            pass
+        await smsg.delete()
+
+# Start bot
 bot.run()
