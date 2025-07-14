@@ -197,7 +197,6 @@ async def forward_message(m, msg):
         else:
             await smsg.edit("❌ Unsupported media type.")
             return
-        await smsg.edit("✅ Uploaded successfully.")
     except Exception as e:
         await smsg.edit(f"❌ Upload error: {e}")
     finally:
