@@ -46,11 +46,15 @@ def time_formatter(ms):
     return f"{hours}h {minutes}m" if hours else f"{minutes}m {seconds}s" if minutes else f"{seconds}s"
 
 def progress_bar(current, total):
-    percent = current * 100 / total
-    filled = int(percent // 10)
-    bar = "▪️" * filled + "▫️" * (10 - filled)
+    if total == 0:
+        bar = "▫️" * 10  # Empty bar
+        percent = 0
+    else:
+        percent = current * 100 / total
+        filled = int(percent // 10)
+        bar = "▪️" * filled + "▫️" * (10 - filled)
     return bar, percent
-
+    
 async def update_progress(message, current_func, total, start, status, filename="File", anim=[0]):
     while True:
         current = current_func()
