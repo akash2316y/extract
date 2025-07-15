@@ -144,30 +144,33 @@ async def main(_, m):
 async def forward_message(m, msg):
     msg_type, filename, filesize = get_type(msg)
 
-    # ✅ Handle text-only or quote-only messages
+    # Handle text or fallback quote messages
     if msg_type == "Text" or not msg_type:
         try:
             text = (msg.text or "").strip()
 
-            # ✅ Use quote text if original message empty
+            # Fallback to quote/replied message text
             if not text and msg.reply_to_message and msg.reply_to_message.text:
                 text = msg.reply_to_message.text.strip()
 
-            # ✅ Add forwarded sender info if any
+            # Fallback to caption if present
+            if not text and msg.caption:
+                text = msg.caption.strip()
+
+            # Add "forwarded from" if available
             if msg.forward_from:
                 sender = f"{msg.forward_from.first_name} {msg.forward_from.last_name or ''}".strip()
                 text = f"💬 Forwarded from {sender}:\n\n{text}"
             elif msg.forward_sender_name:
                 text = f"💬 Forwarded from {msg.forward_sender_name}:\n\n{text}"
 
-            # ✅ Send only if something meaningful
-            if text.strip():
+            if text:
                 await user.send_message(DB_CHANNEL, text, entities=msg.entities)
         except:
-            pass  # Silent failure
+            pass
         return
 
-    # ✅ Begin media download
+    # Media handling
     smsg = await m.reply("📥 Downloading...")
 
     downloaded = [0]
@@ -226,7 +229,6 @@ async def forward_message(m, msg):
             os.remove(file_path)
         except:
             pass
-
 
 
 bot.run()
