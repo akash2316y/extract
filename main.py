@@ -144,16 +144,24 @@ async def main(_, m):
 async def forward_message(m, msg):
     msg_type, filename, filesize = get_type(msg)
 
-    # ✅ Handle text-only or quote messages
+    # ✅ Handle text-only or quoted text
     if msg_type == "Text" or not msg_type:
         try:
-            text = msg.text.strip() if msg.text else None
-            if not text:
+            text = msg.text.strip() if msg.text else ""
+
+            # Add forwarded sender info if present
+            if msg.forward_from:
+                sender = f"{msg.forward_from.first_name} {msg.forward_from.last_name or ''}".strip()
+                text = f"💬 Forwarded from {sender}:\n\n{text}"
+            elif msg.forward_sender_name:
+                text = f"💬 Forwarded from {msg.forward_sender_name}:\n\n{text}"
+
+            if not text.strip():
                 text = "🔹 Forwarded text message"
+
             await user.send_message(DB_CHANNEL, text, entities=msg.entities)
-            await m.reply("✅ Text forwarded.")
-        except Exception as e:
-            await m.reply(f"❌ Failed to forward text: {e}")
+        except:
+            pass  # Silent fail for text
         return
 
     # ✅ Begin media download
