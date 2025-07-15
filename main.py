@@ -144,24 +144,27 @@ async def main(_, m):
 async def forward_message(m, msg):
     msg_type, filename, filesize = get_type(msg)
 
-    # ✅ Handle text-only or quoted text
+    # ✅ Handle text-only or quote-only messages
     if msg_type == "Text" or not msg_type:
         try:
-            text = msg.text.strip() if msg.text else ""
+            text = (msg.text or "").strip()
 
-            # Add forwarded sender info if present
+            # ✅ Use quote text if original message empty
+            if not text and msg.reply_to_message and msg.reply_to_message.text:
+                text = msg.reply_to_message.text.strip()
+
+            # ✅ Add forwarded sender info if any
             if msg.forward_from:
                 sender = f"{msg.forward_from.first_name} {msg.forward_from.last_name or ''}".strip()
                 text = f"💬 Forwarded from {sender}:\n\n{text}"
             elif msg.forward_sender_name:
                 text = f"💬 Forwarded from {msg.forward_sender_name}:\n\n{text}"
 
-            if not text.strip():
-                text = "🔹 Forwarded text message"
-
-            await user.send_message(DB_CHANNEL, text, entities=msg.entities)
+            # ✅ Send only if something meaningful
+            if text.strip():
+                await user.send_message(DB_CHANNEL, text, entities=msg.entities)
         except:
-            pass  # Silent fail for text
+            pass  # Silent failure
         return
 
     # ✅ Begin media download
@@ -223,5 +226,7 @@ async def forward_message(m, msg):
             os.remove(file_path)
         except:
             pass
+
+
 
 bot.run()
