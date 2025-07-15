@@ -102,7 +102,7 @@ def get_type(msg):
 
 @bot.on_message(filters.command("start"))
 async def start(_, m):
-    await m.reply("👋 Send Telegram post links. I’ll fetch & upload them to your DB channel.")
+    await m.reply("<blockquote>👋 Send Telegram post links. I’ll fetch & upload them to your DB channel.</blockquote>")
 
 @bot.on_message(filters.text)
 async def main(_, m):
