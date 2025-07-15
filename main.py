@@ -142,9 +142,14 @@ async def main(_, m):
 
 async def forward_message(m, msg):
     msg_type, filename, filesize = get_type(msg)
-    if msg_type == "Text":
-        await user.send_message(DB_CHANNEL, msg.text, entities=msg.entities)
-        await m.reply("✅ Text forwarded.")
+
+    # Handle plain text or quoted messages
+    if msg_type == "Text" or not msg_type:
+        try:
+            await user.send_message(DB_CHANNEL, msg.text or " ", entities=msg.entities)
+            await m.reply("✅ Text forwarded.")
+        except Exception as e:
+            await m.reply(f"❌ Failed to forward text: {e}")
         return
 
     smsg = await m.reply("📥 Downloading...")
@@ -156,7 +161,7 @@ async def forward_message(m, msg):
         downloaded[0] = current
 
     progress_task = asyncio.create_task(update_progress(
-        smsg, lambda: downloaded[0], filesize, start_time, "📥 Downloading", filename
+        smsg, lambda: downloaded[0], filesize or 1, start_time, "📥 Downloading", filename or "File"
     ))
 
     file_path = await user.download_media(msg, file_name="downloads/", progress=download_cb)
