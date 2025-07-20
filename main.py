@@ -223,12 +223,13 @@ async def forward_message(m, msg):
             return
     except Exception as e:
         await smsg.edit(f"❌ Upload error: {e}")
+    else:
+        await smsg.delete()
     finally:
         upload_task.cancel()
         try:
             os.remove(file_path)
         except:
             pass
-
 
 bot.run()
