@@ -225,6 +225,7 @@ async def forward_message(m, msg):
         await smsg.edit(f"❌ Upload error: {e}")
     else:
         await smsg.delete()
+        await asyncio.sleep(5)  # ⏱ FloodWait से बचने के लिए हर फाइल के बाद 5 सेकंड रुकें
     finally:
         upload_task.cancel()
         try:
