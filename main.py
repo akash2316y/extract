@@ -1,12 +1,10 @@
-import pyrogram.utils
-pyrogram.utils.MIN_CHANNEL_ID = -1009147483647
-from pyrogram import Client, filters
-from pyrogram.types import InlineKeyboardMarkup, InlineKeyboardButton
-import asyncio
 import os
+import re
 import json
 import time
-import re
+import asyncio
+from pyrogram import Client, filters
+from pyrogram.types import InlineKeyboardMarkup, InlineKeyboardButton
 
 # Load config
 with open('config.json', 'r') as f:
@@ -26,9 +24,8 @@ ANIMATION_FRAMES = [".", "..", "..."]
 # Initialize bot
 bot = Client("bot", api_id=API_ID, api_hash=API_HASH, bot_token=BOT_TOKEN)
 
-# Optional user account (for private access)
+# Optional user session
 user = Client("user", api_id=API_ID, api_hash=API_HASH, session_string=STRING_SESSION) if STRING_SESSION else None
-
 if user:
     user.start()
 
@@ -52,16 +49,14 @@ def progress_bar(current, total):
         current = float(current)
         total = float(total)
         if total == 0:
-            bar = "▫️" * 10  # Empty bar
-            percent = 0
-        else:
-            percent = current * 100 / total
-            filled = int(percent // 10)
-            bar = "▪️" * filled + "▫️" * (10 - filled)
+            return "▫️" * 10, 0
+        percent = current * 100 / total
+        filled = int(percent // 10)
+        bar = "▪️" * filled + "▫️" * (10 - filled)
         return bar, percent
-    except (ValueError, TypeError, ZeroDivisionError):
+    except:
         return "▫️" * 10, 0
-    
+
 async def update_progress(message, current_func, total, start, status, filename="File", anim=[0]):
     while True:
         current = current_func()
@@ -70,16 +65,15 @@ async def update_progress(message, current_func, total, start, status, filename=
         speed = current / elapsed if elapsed else 0
         eta = (total - current) / speed if speed else 0
         dots = ANIMATION_FRAMES[anim[0] % len(ANIMATION_FRAMES)]
-
+        
         text = f"""{status} {dots}
 
-📄 **{filename}**
+📄 {filename}
 [{bar}]
 Progress: {percent:.2f}%
 Size: {humanbytes(current)} of {humanbytes(total)}
 Speed: {humanbytes(speed)}/s
 ETA: {time_formatter(eta * 1000)}"""
-
         try:
             await message.edit_text(text)
         except:
@@ -91,19 +85,27 @@ ETA: {time_formatter(eta * 1000)}"""
         await asyncio.sleep(1)
 
 def get_type(msg):
-    if msg.document: return "Document", msg.document.file_name, msg.document.file_size
-    if msg.video: return "Video", msg.video.file_name, msg.video.file_size
-    if msg.audio: return "Audio", msg.audio.file_name, msg.audio.file_size
-    if msg.voice: return "Voice", "voice.ogg", msg.voice.file_size
-    if msg.photo: return "Photo", "photo.jpg", 0
-    if msg.animation: return "Animation", msg.animation.file_name, msg.animation.file_size
-    if msg.sticker: return "Sticker", "sticker.webp", 0
-    if msg.text: return "Text", None, 0
+    if msg.document:
+        return "Document", msg.document.file_name, msg.document.file_size
+    if msg.video:
+        return "Video", msg.video.file_name, msg.video.file_size
+    if msg.audio:
+        return "Audio", msg.audio.file_name, msg.audio.file_size
+    if msg.voice:
+        return "Voice", "voice.ogg", msg.voice.file_size
+    if msg.photo:
+        return "Photo", "photo.jpg", 0
+    if msg.animation:
+        return "Animation", msg.animation.file_name, msg.animation.file_size
+    if msg.sticker:
+        return "Sticker", "sticker.webp", 0
+    if msg.text:
+        return "Text", None, 0
     return None, None, 0
 
 @bot.on_message(filters.command("start"))
 async def start(_, m):
-    await m.reply("<blockquote>👋 Send Telegram post links. I’ll fetch & upload them to your DB channel.</blockquote>")
+    await m.reply("<b>👋 Send Telegram post links. I’ll fetch & upload them to your DB channel.</b>")
 
 @bot.on_message(filters.text)
 async def main(_, m):
@@ -126,10 +128,7 @@ async def main(_, m):
 
             for msg_id in range(from_id, to_id + 1):
                 try:
-                    if "t.me/c/" in text:
-                        msg = await user.get_messages(chat_id, msg_id)
-                    else:
-                        msg = await bot.get_messages(chat_id, msg_id)
+                    msg = await (user if user else bot).get_messages(chat_id, msg_id)
                 except:
                     if not user:
                         await m.reply("❌ Need user session to access private post.")
@@ -137,10 +136,10 @@ async def main(_, m):
                     msg = await user.get_messages(chat_id, msg_id)
 
                 await forward_message(m, msg)
+                await asyncio.sleep(1)
 
         except Exception as e:
             await m.reply(f"❌ Error: {e}")
-
 
 async def forward_message(m, msg):
     msg_type, filename, filesize = get_type(msg)
@@ -219,3 +218,4 @@ async def forward_message(m, msg):
             pass
 
 bot.run()
+
