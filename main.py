@@ -116,15 +116,14 @@ async def main(_, m):
 
             for msg_id in range(from_id, to_id + 1):
                 try:
-                    if "t.me/c/" in text:
+                    # ✅ Always use user session to fetch full message (including buttons)
+                    if user:
                         msg = await user.get_messages(chat_id, msg_id)
                     else:
                         msg = await bot.get_messages(chat_id, msg_id)
-                except:
-                    if not user:
-                        await m.reply("❌ Need user session to access private post.")
-                        return
-                    msg = await user.get_messages(chat_id, msg_id)
+                except Exception as e:
+                    await m.reply(f"❌ Failed to fetch message: {e}")
+                    continue
 
                 await forward_message(m, msg)
 
@@ -152,7 +151,7 @@ async def forward_message(m, msg):
                     DB_CHANNEL,
                     text,
                     entities=msg.entities,
-                    reply_markup=msg.reply_markup
+                    reply_markup=msg.reply_markup  # ✅ Preserve inline buttons
                 )
         except Exception as e:
             await m.reply(f"❌ Failed to send text: {e}")
