@@ -120,14 +120,16 @@ async def main(_, m):
             to_id = int(temp[1]) if len(temp) > 1 else from_id
             chat_id = int("-100" + parts[4]) if "t.me/c/" in text else parts[3]
 
+            if not user:
+                await m.reply("❌ User session required for this operation.")
+                return
+
             for msg_id in range(from_id, to_id + 1):
                 try:
-                    msg = await (user.get_messages if "t.me/c/" in text else bot.get_messages)(chat_id, msg_id)
-                except:
-                    if not user:
-                        await m.reply("❌ Need user session to access private post.")
-                        return
                     msg = await user.get_messages(chat_id, msg_id)
+                except Exception as e:
+                    await m.reply(f"❌ Failed to fetch message {msg_id}: {e}")
+                    continue
 
                 await forward_message(m, msg)
 
@@ -180,7 +182,13 @@ async def forward_message(m, msg):
         smsg, lambda: downloaded[0], filesize or 1, start_time, "📥 Downloading", filename or "File"
     ))
 
-    file_path = await user.download_media(msg, file_name="downloads/", progress=download_cb)
+    try:
+        file_path = await user.download_media(msg, file_name="downloads/", progress=download_cb)
+    except Exception as e:
+        progress_task.cancel()
+        await smsg.edit(f"❌ Download failed: {e}")
+        return
+
     downloaded[0] = os.path.getsize(file_path) if os.path.exists(file_path) else 0
     progress_task.cancel()
 
