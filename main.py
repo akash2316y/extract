@@ -1,5 +1,6 @@
 import pyrogram.utils
 pyrogram.utils.MIN_CHANNEL_ID = -1009147483647
+
 from pyrogram import Client, filters
 from pyrogram.types import InlineKeyboardMarkup, InlineKeyboardButton
 import asyncio
@@ -7,6 +8,9 @@ import os
 import json
 import time
 import re
+import logging
+
+logging.basicConfig(level=logging.INFO)
 
 # Load config
 with open('config.json', 'r') as f:
@@ -23,15 +27,14 @@ DB_CHANNEL = int(getenv("DB_CHANNEL"))
 
 ANIMATION_FRAMES = [".", "..", "..."]
 
-# Initialize bot
+# Clients
 bot = Client("bot", api_id=API_ID, api_hash=API_HASH, bot_token=BOT_TOKEN)
-
-# Optional user account (for private access)
 user = Client("user", api_id=API_ID, api_hash=API_HASH, session_string=STRING_SESSION) if STRING_SESSION else None
 
 if user:
     user.start()
 
+# Utilities
 def humanbytes(size):
     power = 2**10
     n = 0
@@ -51,17 +54,13 @@ def progress_bar(current, total):
     try:
         current = float(current)
         total = float(total)
-        if total == 0:
-            bar = "▫️" * 10  # Empty bar
-            percent = 0
-        else:
-            percent = current * 100 / total
-            filled = int(percent // 10)
-            bar = "▪️" * filled + "▫️" * (10 - filled)
+        percent = current * 100 / total if total else 0
+        filled = int(percent // 10)
+        bar = "▪️" * filled + "▫️" * (10 - filled)
         return bar, percent
-    except (ValueError, TypeError, ZeroDivisionError):
+    except:
         return "▫️" * 10, 0
-    
+
 async def update_progress(message, current_func, total, start, status, filename="File", anim=[0]):
     while True:
         current = current_func()
@@ -103,7 +102,7 @@ def get_type(msg):
 
 @bot.on_message(filters.command("start"))
 async def start(_, m):
-    await m.reply("<blockquote>👋 Send Telegram post links. I’ll fetch & upload them to your DB channel.</blockquote>")
+    await m.reply("👋 Send Telegram post links. I’ll fetch & upload them to your DB channel.")
 
 @bot.on_message(filters.text)
 async def main(_, m):
@@ -126,10 +125,7 @@ async def main(_, m):
 
             for msg_id in range(from_id, to_id + 1):
                 try:
-                    if "t.me/c/" in text:
-                        msg = await user.get_messages(chat_id, msg_id)
-                    else:
-                        msg = await bot.get_messages(chat_id, msg_id)
+                    msg = await user.get_messages(chat_id, msg_id) if "t.me/c/" in text else await bot.get_messages(chat_id, msg_id)
                 except:
                     if not user:
                         await m.reply("❌ Need user session to access private post.")
@@ -137,10 +133,10 @@ async def main(_, m):
                     msg = await user.get_messages(chat_id, msg_id)
 
                 await forward_message(m, msg)
+                await asyncio.sleep(2)  # Prevent spam flood
 
         except Exception as e:
             await m.reply(f"❌ Error: {e}")
-
 
 async def forward_message(m, msg):
     msg_type, filename, filesize = get_type(msg)
@@ -148,16 +144,17 @@ async def forward_message(m, msg):
     if msg_type == "Text" or not msg_type:
         try:
             text = (msg.text or msg.caption or "").strip()
-            links = re.findall(r"https?://[\w./?=&%-]+", text)
+            links = re.findall(r"https?://[^\s]+", text)
             keyboard = None
             if links:
                 buttons = [[InlineKeyboardButton(f"🔗 Link {i+1}", url=url)] for i, url in enumerate(links)]
                 keyboard = InlineKeyboardMarkup(buttons)
 
             await bot.send_message(m.chat.id, text, reply_markup=keyboard)
+            await asyncio.sleep(1)
             await bot.send_message(DB_CHANNEL, text, reply_markup=keyboard)
-        except:
-            pass
+        except Exception as e:
+            await m.reply(f"❌ Couldn't forward text: {e}")
         return
 
     smsg = await m.reply("📥 Downloading...")
@@ -192,6 +189,7 @@ async def forward_message(m, msg):
 
     try:
         for target in [m.chat.id, DB_CHANNEL]:
+            await asyncio.sleep(1)
             if msg_type == "Document":
                 await bot.send_document(target, file_path, caption=msg.caption, caption_entities=msg.caption_entities, progress=upload_cb)
             elif msg_type == "Video":
@@ -206,11 +204,13 @@ async def forward_message(m, msg):
                 await bot.send_animation(target, file_path, progress=upload_cb)
             elif msg_type == "Sticker":
                 await bot.send_sticker(target, file_path)
-            await asyncio.sleep(1)
     except Exception as e:
         await smsg.edit(f"❌ Upload error: {e}")
     else:
-        await smsg.delete()
+        try:
+            await smsg.delete()
+        except:
+            pass
     finally:
         upload_task.cancel()
         try:
