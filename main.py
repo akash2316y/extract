@@ -22,7 +22,7 @@ DB_CHANNEL = int(getenv("DB_CHANNEL"))
 
 ANIMATION_FRAMES = [".", "..", "..."]
 
-# Initialize bot
+# Initialize clients
 bot = Client("bot", api_id=API_ID, api_hash=API_HASH, bot_token=BOT_TOKEN)
 user = Client("user", api_id=API_ID, api_hash=API_HASH, session_string=STRING_SESSION) if STRING_SESSION else None
 if user:
@@ -99,7 +99,7 @@ def get_type(msg):
 
 @bot.on_message(filters.command("start"))
 async def start(_, m):
-    await m.reply("<blockquote>👋 Send Telegram post links. I’ll fetch & upload them to your DB channel.</blockquote>")
+    await m.reply("👋 Send a Telegram post link. I'll fetch it and upload it to the DB channel.")
 
 @bot.on_message(filters.text)
 async def main(_, m):
@@ -121,14 +121,14 @@ async def main(_, m):
             chat_id = int("-100" + parts[4]) if "t.me/c/" in text else parts[3]
 
             if not user:
-                await m.reply("❌ User session required for this operation.")
+                await m.reply("❌ User session required.")
                 return
 
             for msg_id in range(from_id, to_id + 1):
                 try:
                     msg = await user.get_messages(chat_id, msg_id)
                 except Exception as e:
-                    await m.reply(f"❌ Failed to fetch message {msg_id}: {e}")
+                    await m.reply(f"❌ Error fetching message {msg_id}: {e}")
                     continue
 
                 await forward_message(m, msg)
@@ -142,33 +142,54 @@ def extract_buttons(msg):
         for row in msg.reply_markup.inline_keyboard:
             new_row = []
             for btn in row:
-                if btn.url:
-                    new_row.append(InlineKeyboardButton(btn.text, url=btn.url))
+                try:
+                    if btn.url:
+                        new_row.append(InlineKeyboardButton(btn.text or "🔗 Link", url=btn.url))
+                except:
+                    pass
             if new_row:
                 buttons.append(new_row)
     return InlineKeyboardMarkup(buttons) if buttons else None
 
+def extract_button_links_as_text(msg):
+    links = []
+    if msg.reply_markup and msg.reply_markup.inline_keyboard:
+        for row in msg.reply_markup.inline_keyboard:
+            for btn in row:
+                if btn.url:
+                    links.append(f"🔗 [{btn.text}]({btn.url})")
+    return "\n".join(links)
+
 async def forward_message(m, msg):
     msg_type, filename, filesize = get_type(msg)
     markup = extract_buttons(msg)
+    buttons_text = extract_button_links_as_text(msg)
 
     if msg_type == "Text" or not msg_type:
         try:
-            text = (msg.text or "").strip()
-            if not text and msg.reply_to_message and msg.reply_to_message.text:
-                text = msg.reply_to_message.text.strip()
-            if not text and msg.caption:
-                text = msg.caption.strip()
+            if msg.text:
+                text = msg.text
+                entities = msg.entities
+            elif msg.caption:
+                text = msg.caption
+                entities = msg.caption_entities
+            else:
+                text = ""
+                entities = None
+
             if msg.forward_from:
                 sender = f"{msg.forward_from.first_name} {msg.forward_from.last_name or ''}".strip()
                 text = f"💬 Forwarded from {sender}:\n\n{text}"
             elif msg.forward_sender_name:
                 text = f"💬 Forwarded from {msg.forward_sender_name}:\n\n{text}"
 
+            if buttons_text:
+                text += f"\n\n{buttons_text}"
+
             if text:
-                await user.send_message(DB_CHANNEL, text, entities=msg.entities, reply_markup=markup)
-        except:
-            pass
+                await user.send_message(DB_CHANNEL, text=text, entities=entities, disable_web_page_preview=True)
+        except Exception as e:
+            await m.reply(f"❌ Failed to forward text: {e}")
         return
 
     smsg = await m.reply("📥 Downloading...")
@@ -208,18 +229,22 @@ async def forward_message(m, msg):
     ))
 
     try:
+        caption = msg.caption or ""
+        if buttons_text:
+            caption += f"\n\n{buttons_text}"
+
         if msg_type == "Document":
-            await user.send_document(DB_CHANNEL, file_path, caption=msg.caption, caption_entities=msg.caption_entities, reply_markup=markup, progress=upload_cb)
+            await user.send_document(DB_CHANNEL, file_path, caption=caption, caption_entities=msg.caption_entities, reply_markup=markup, progress=upload_cb)
         elif msg_type == "Video":
-            await user.send_video(DB_CHANNEL, file_path, caption=msg.caption, caption_entities=msg.caption_entities, reply_markup=markup, progress=upload_cb)
+            await user.send_video(DB_CHANNEL, file_path, caption=caption, caption_entities=msg.caption_entities, reply_markup=markup, progress=upload_cb)
         elif msg_type == "Audio":
-            await user.send_audio(DB_CHANNEL, file_path, caption=msg.caption, caption_entities=msg.caption_entities, reply_markup=markup, progress=upload_cb)
+            await user.send_audio(DB_CHANNEL, file_path, caption=caption, caption_entities=msg.caption_entities, reply_markup=markup, progress=upload_cb)
         elif msg_type == "Photo":
-            await user.send_photo(DB_CHANNEL, file_path, caption=msg.caption, caption_entities=msg.caption_entities, reply_markup=markup)
+            await user.send_photo(DB_CHANNEL, file_path, caption=caption, caption_entities=msg.caption_entities, reply_markup=markup)
         elif msg_type == "Voice":
-            await user.send_voice(DB_CHANNEL, file_path, caption=msg.caption, caption_entities=msg.caption_entities, reply_markup=markup, progress=upload_cb)
+            await user.send_voice(DB_CHANNEL, file_path, caption=caption, caption_entities=msg.caption_entities, reply_markup=markup, progress=upload_cb)
         elif msg_type == "Animation":
-            await user.send_animation(DB_CHANNEL, file_path, caption=msg.caption, caption_entities=msg.caption_entities, reply_markup=markup, progress=upload_cb)
+            await user.send_animation(DB_CHANNEL, file_path, caption=caption, caption_entities=msg.caption_entities, reply_markup=markup, progress=upload_cb)
         elif msg_type == "Sticker":
             await user.send_sticker(DB_CHANNEL, file_path, reply_markup=markup)
         else:
