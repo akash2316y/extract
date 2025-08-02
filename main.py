@@ -126,6 +126,7 @@ async def main(_, m):
         except Exception as e:
             await m.reply(f"❌ Error: {e}")
 
+
 def extract_buttons(msg):
     buttons = []
     if msg.reply_markup and msg.reply_markup.inline_keyboard:
@@ -133,7 +134,7 @@ def extract_buttons(msg):
             new_row = []
             for btn in row:
                 if btn.url:
-                    new_row.append(InlineKeyboardButton(btn.text, url=btn.url))
+                    new_row.append(InlineKeyboardButton(btn.text or "🔗 Link", url=btn.url))
             if new_row:
                 buttons.append(new_row)
     return InlineKeyboardMarkup(buttons) if buttons else None
