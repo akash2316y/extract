@@ -1,7 +1,7 @@
 import pyrogram.utils
 pyrogram.utils.MIN_CHANNEL_ID = -1009147483647
 from pyrogram import Client, filters
-from pyrogram.types import InlineKeyboardMarkup, InlineKeyboardButton
+from pyrogram.types import InlineKeyboardMarkup, InlineKeyboardButton, Message
 import asyncio
 import os
 import json
@@ -19,6 +19,7 @@ API_HASH = getenv("HASH")
 BOT_TOKEN = getenv("TOKEN")
 STRING_SESSION = getenv("STRING")
 DB_CHANNEL = int(getenv("DB_CHANNEL"))
+ALLOWED_USERS = set(DATA.get("ALLOWED_USERS", []))  # ✅ User Auth
 
 ANIMATION_FRAMES = [".", "..", "..."]
 
@@ -27,6 +28,17 @@ bot = Client("bot", api_id=API_ID, api_hash=API_HASH, bot_token=BOT_TOKEN)
 user = Client("user", api_id=API_ID, api_hash=API_HASH, session_string=STRING_SESSION) if STRING_SESSION else None
 if user:
     user.start()
+
+# ✅ User Auth Decorator
+def is_allowed_user(func):
+    async def wrapper(client, message: Message):
+        user_id = message.from_user.id
+        if user_id not in ALLOWED_USERS:
+            await message.reply("🚫 You are not authorized to use this bot.")
+            print(f"[AUTH BLOCKED] Unauthorized user: {user_id}")
+            return
+        return await func(client, message)
+    return wrapper
 
 def humanbytes(size):
     power = 2**10
@@ -98,10 +110,12 @@ def get_type(msg):
     return None, None, 0
 
 @bot.on_message(filters.command("start"))
+@is_allowed_user  # ✅ Access Control
 async def start(_, m):
     await m.reply("<blockquote>👋 Send Telegram post links. I’ll fetch & upload them to your DB channel.</blockquote>")
 
 @bot.on_message(filters.text)
+@is_allowed_user  # ✅ Access Control
 async def main(_, m):
     text = m.text.strip()
     if ("t.me/+" in text or "joinchat/" in text) and user:
@@ -185,7 +199,6 @@ async def forward_message(m, msg):
     ))
 
     try:
-        # Re-fetch message to get a fresh file reference
         msg = await user.get_messages(msg.chat.id, msg.id)
         file_path = await user.download_media(msg, file_name="downloads/", progress=download_cb)
     except Exception as e:
@@ -242,4 +255,3 @@ async def forward_message(m, msg):
             pass
 
 bot.run()
-
