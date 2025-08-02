@@ -141,7 +141,7 @@ async def forward_message(m, chat_id, msg_id):
 
     msg_type, filename, filesize = get_type(msg)
     markup = extract_buttons(msg)
-
+    
     if msg_type == "Text" or not msg_type:
         try:
             text = (msg.text or msg.caption or "").strip()
