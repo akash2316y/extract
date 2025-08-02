@@ -1,3 +1,4 @@
+
 import pyrogram.utils
 pyrogram.utils.MIN_CHANNEL_ID = -1009147483647
 
@@ -92,6 +93,19 @@ def get_type(msg):
     if msg.text: return "Text", None, 0
     return None, None, 0
 
+# ✅ NEW: Button Extractor (Regenerate buttons manually)
+def extract_buttons(msg):
+    buttons = []
+    if msg.reply_markup and hasattr(msg.reply_markup, "inline_keyboard"):
+        for row in msg.reply_markup.inline_keyboard:
+            new_row = []
+            for btn in row:
+                if btn.url:
+                    new_row.append(InlineKeyboardButton(btn.text or "🔗 Link", url=btn.url))
+            if new_row:
+                buttons.append(new_row)
+    return InlineKeyboardMarkup(buttons) if buttons else None
+
 @bot.on_message(filters.command("start"))
 async def start(_, m):
     await m.reply("<blockquote>👋 Send Telegram post links. I’ll fetch & upload them to your DB channel.</blockquote>")
@@ -122,18 +136,6 @@ async def main(_, m):
                     await m.reply(f"❌ Failed to process message {msg_id}: {e}")
         except Exception as e:
             await m.reply(f"❌ Error: {e}")
-
-def extract_buttons(msg):
-    buttons = []
-    if msg.reply_markup and msg.reply_markup.inline_keyboard:
-        for row in msg.reply_markup.inline_keyboard:
-            new_row = []
-            for btn in row:
-                if btn.url:
-                    new_row.append(InlineKeyboardButton(btn.text or "🔗 Link", url=btn.url))
-            if new_row:
-                buttons.append(new_row)
-    return InlineKeyboardMarkup(buttons) if buttons else None
 
 async def forward_message(m, chat_id, msg_id):
     if not user:
@@ -178,9 +180,7 @@ async def forward_message(m, chat_id, msg_id):
     ))
 
     try:
-        # ⚠️ Re-fetch the message to get a fresh file reference
-        msg = await user.get_messages(chat_id, msg_id)
-
+        msg = await user.get_messages(chat_id, msg_id)  # Refetch
         file_path = await user.download_media(msg, file_name="downloads/", progress=download_cb)
     except Exception as e:
         progress_task.cancel()
@@ -238,3 +238,4 @@ async def forward_message(m, chat_id, msg_id):
             pass
 
 bot.run()
+
