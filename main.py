@@ -1,5 +1,4 @@
 
-
 import pyrogram.utils
 pyrogram.utils.MIN_CHANNEL_ID = -1009147483647
 from pyrogram import Client, filters
@@ -24,7 +23,6 @@ DB_CHANNEL = int(getenv("DB_CHANNEL"))
 
 ANIMATION_FRAMES = [".", "..", "..."]
 
-# Initialize bot
 bot = Client("bot", api_id=API_ID, api_hash=API_HASH, bot_token=BOT_TOKEN)
 user = Client("user", api_id=API_ID, api_hash=API_HASH, session_string=STRING_SESSION) if STRING_SESSION else None
 if user:
@@ -177,6 +175,13 @@ async def forward_message(m, msg):
 
     async def download_cb(current, total):
         downloaded[0] = current
+
+    # 🛠️ Re-fetch to renew expired file reference
+    try:
+        msg = await user.get_messages(msg.chat.id, msg.id)
+    except Exception as e:
+        await smsg.edit(f"❌ Error fetching message: {e}")
+        return
 
     progress_task = asyncio.create_task(update_progress(
         smsg, lambda: downloaded[0], filesize or 1, start_time, "📥 Downloading", filename or "File"
