@@ -120,49 +120,6 @@ def get_type(msg):
 async def start(_, m):
     await m.reply("<blockquote>\ud83d\udc4b Send Telegram post links. I\u2019ll fetch & upload them to your DB channel.</blockquote>")
 
-@bot.on_message(filters.command("allow") & filters.private)
-@is_allowed_user
-async def allow_user(_, m: Message):
-    if m.from_user.id not in ADMINS:
-        await m.reply("\ud83d\udeab Only admins can use this command.")
-        return
-    try:
-        uid = int(m.text.split()[1])
-        ALLOWED_USERS.add(uid)
-        save_users()
-        await m.reply(f"\u2705 User `{uid}` allowed.")
-    except Exception as e:
-        await m.reply(f"\u274c Error: {e}\nUse format: `/allow 123456789`", quote=True)
-
-@bot.on_message(filters.command("deny") & filters.private)
-@is_allowed_user
-async def deny_user(_, m: Message):
-    if m.from_user.id not in ADMINS:
-        await m.reply("\ud83d\udeab Only admins can use this command.")
-        return
-    try:
-        uid = int(m.text.split()[1])
-        if uid in ALLOWED_USERS:
-            ALLOWED_USERS.remove(uid)
-            save_users()
-            await m.reply(f"\ud83d\udeab User `{uid}` removed.")
-        else:
-            await m.reply("\u26a0\ufe0f User not found in allowed list.")
-    except Exception as e:
-        await m.reply(f"\u274c Error: {e}\nUse format: `/deny 123456789`", quote=True)
-
-@bot.on_message(filters.command("users") & filters.private)
-@is_allowed_user
-async def list_users(_, m: Message):
-    if m.from_user.id not in ADMINS:
-        await m.reply("\ud83d\udeab Only admins can use this command.")
-        return
-    if not ALLOWED_USERS:
-        await m.reply("No allowed users.")
-    else:
-        users = '\n'.join([f"\u2022 `{uid}`" for uid in ALLOWED_USERS])
-        await m.reply(f"\ud83d\udc65 Allowed Users:\n\n{users}")
-
 @bot.on_message(filters.text)
 @is_allowed_user
 async def main(_, m):
