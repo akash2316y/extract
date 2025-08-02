@@ -1,3 +1,4 @@
+
 import pyrogram.utils
 pyrogram.utils.MIN_CHANNEL_ID = -1009147483647
 from pyrogram import Client, filters
@@ -26,9 +27,7 @@ ANIMATION_FRAMES = [".", "..", "..."]
 # Initialize bot
 bot = Client("bot", api_id=API_ID, api_hash=API_HASH, bot_token=BOT_TOKEN)
 
-# Optional user account (for private access)
 user = Client("user", api_id=API_ID, api_hash=API_HASH, session_string=STRING_SESSION) if STRING_SESSION else None
-
 if user:
     user.start()
 
@@ -52,16 +51,16 @@ def progress_bar(current, total):
         current = float(current)
         total = float(total)
         if total == 0:
-            bar = "▫️" * 10  # Empty bar
+            bar = "▫️" * 10
             percent = 0
         else:
             percent = current * 100 / total
             filled = int(percent // 10)
             bar = "▪️" * filled + "▫️" * (10 - filled)
         return bar, percent
-    except (ValueError, TypeError, ZeroDivisionError):
+    except:
         return "▫️" * 10, 0
-    
+
 async def update_progress(message, current_func, total, start, status, filename="File", anim=[0]):
     while True:
         current = current_func()
@@ -103,7 +102,7 @@ def get_type(msg):
 
 @bot.on_message(filters.command("start"))
 async def start(_, m):
-    await m.reply("<blockquote>👋 Send Telegram post links. I’ll fetch & upload them to your DB channel.</blockquote>")
+    await m.reply("👋 Send Telegram post links. I’ll fetch & upload them to your DB channel.")
 
 @bot.on_message(filters.text)
 async def main(_, m):
@@ -136,15 +135,16 @@ async def main(_, m):
                         return
                     msg = await user.get_messages(chat_id, msg_id)
 
-                await forward_message(m, msg)
+                await forward_message(m, msg, chat_id, msg_id)
 
         except Exception as e:
             await m.reply(f"❌ Error: {e}")
 
-
-async def forward_message(m, msg):
+async def forward_message(m, msg, chat_id, msg_id):
+    # Get message type info
     msg_type, filename, filesize = get_type(msg)
 
+    # Handle plain text message
     if msg_type == "Text" or not msg_type:
         try:
             text = (msg.text or msg.caption or "").strip()
@@ -167,11 +167,14 @@ async def forward_message(m, msg):
     async def download_cb(current, total):
         downloaded[0] = current
 
+    # 🔄 Re-fetch message to avoid expired file_reference
+    fresh_msg = await user.get_messages(chat_id, msg_id)
+
     progress_task = asyncio.create_task(update_progress(
         smsg, lambda: downloaded[0], filesize or 1, start_time, "📥 Downloading", filename or "File"
     ))
 
-    file_path = await user.download_media(msg, file_name="downloads/", progress=download_cb)
+    file_path = await user.download_media(fresh_msg, file_name="downloads/", progress=download_cb)
     downloaded[0] = os.path.getsize(file_path) if os.path.exists(file_path) else 0
     progress_task.cancel()
 
@@ -219,3 +222,5 @@ async def forward_message(m, msg):
             pass
 
 bot.run()
+
+
