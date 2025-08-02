@@ -19,7 +19,15 @@ API_HASH = getenv("HASH")
 BOT_TOKEN = getenv("TOKEN")
 STRING_SESSION = getenv("STRING")
 DB_CHANNEL = int(getenv("DB_CHANNEL"))
-ALLOWED_USERS = set(DATA.get("ALLOWED_USERS", []))  # ✅ User Auth
+ALLOWED_USERS = set(DATA.get("ALLOWED_USERS", []))
+ADMINS = set(DATA.get("ADMINS", []))
+
+# Save ALLOWED_USERS back to config
+
+def save_users():
+    DATA["ALLOWED_USERS"] = list(ALLOWED_USERS)
+    with open('config.json', 'w') as f:
+        json.dump(DATA, f, indent=2)
 
 ANIMATION_FRAMES = [".", "..", "..."]
 
@@ -29,12 +37,13 @@ user = Client("user", api_id=API_ID, api_hash=API_HASH, session_string=STRING_SE
 if user:
     user.start()
 
-# ✅ User Auth Decorator
+# Decorator for allowed users
+
 def is_allowed_user(func):
     async def wrapper(client, message: Message):
         user_id = message.from_user.id
         if user_id not in ALLOWED_USERS:
-            await message.reply("🚫 You are not authorized to use this bot.")
+            await message.reply("\ud83d\udeab You are not authorized to use this bot.")
             print(f"[AUTH BLOCKED] Unauthorized user: {user_id}")
             return
         return await func(client, message)
@@ -60,15 +69,15 @@ def progress_bar(current, total):
         current = float(current)
         total = float(total)
         if total == 0:
-            bar = "▫️" * 10
+            bar = "\u25ab\ufe0f" * 10
             percent = 0
         else:
             percent = current * 100 / total
             filled = int(percent // 10)
-            bar = "▪️" * filled + "▫️" * (10 - filled)
+            bar = "\u25aa\ufe0f" * filled + "\u25ab\ufe0f" * (10 - filled)
         return bar, percent
     except:
-        return "▫️" * 10, 0
+        return "\u25ab\ufe0f" * 10, 0
 
 async def update_progress(message, current_func, total, start, status, filename="File", anim=[0]):
     while True:
@@ -81,7 +90,7 @@ async def update_progress(message, current_func, total, start, status, filename=
 
         text = f"""{status} {dots}
 
-📄 **{filename}**
+\ud83d\udcc4 **{filename}**
 [{bar}]
 Progress: {percent:.2f}%
 Size: {humanbytes(current)} of {humanbytes(total)}
@@ -110,20 +119,20 @@ def get_type(msg):
     return None, None, 0
 
 @bot.on_message(filters.command("start"))
-@is_allowed_user  # ✅ Access Control
+@is_allowed_user
 async def start(_, m):
-    await m.reply("<blockquote>👋 Send Telegram post links. I’ll fetch & upload them to your DB channel.</blockquote>")
+    await m.reply("<blockquote>\ud83d\udc4b Send Telegram post links. I\u2019ll fetch & upload them to your DB channel.</blockquote>")
 
 @bot.on_message(filters.text)
-@is_allowed_user  # ✅ Access Control
+@is_allowed_user
 async def main(_, m):
     text = m.text.strip()
     if ("t.me/+" in text or "joinchat/" in text) and user:
         try:
             await user.join_chat(text)
-            await m.reply("✅ Joined the group/channel.")
+            await m.reply("\u2705 Joined the group/channel.")
         except Exception as e:
-            await m.reply(f"❌ Couldn't join: {e}")
+            await m.reply(f"\u274c Couldn't join: {e}")
         return
 
     if "https://t.me/" in text:
@@ -139,14 +148,14 @@ async def main(_, m):
                     msg = await (user.get_messages if "t.me/c/" in text else bot.get_messages)(chat_id, msg_id)
                 except:
                     if not user:
-                        await m.reply("❌ Need user session to access private post.")
+                        await m.reply("\u274c Need user session to access private post.")
                         return
                     msg = await user.get_messages(chat_id, msg_id)
 
                 await forward_message(m, msg)
 
         except Exception as e:
-            await m.reply(f"❌ Error: {e}")
+            await m.reply(f"\u274c Error: {e}")
 
 def extract_buttons(msg):
     buttons = []
@@ -155,7 +164,7 @@ def extract_buttons(msg):
             new_row = []
             for btn in row:
                 if btn.url:
-                    new_row.append(InlineKeyboardButton(btn.text or "🔗 Link", url=btn.url))
+                    new_row.append(InlineKeyboardButton(btn.text or "\ud83d\udd17 Link", url=btn.url))
             if new_row:
                 buttons.append(new_row)
     return InlineKeyboardMarkup(buttons) if buttons else None
@@ -178,16 +187,16 @@ async def forward_message(m, msg):
 
             if msg.forward_from:
                 sender = f"{msg.forward_from.first_name} {msg.forward_from.last_name or ''}".strip()
-                text = f"💬 Forwarded from {sender}:\n\n{text}"
+                text = f"\ud83d\udcac Forwarded from {sender}:\n\n{text}"
             elif msg.forward_sender_name:
-                text = f"💬 Forwarded from {msg.forward_sender_name}:\n\n{text}"
+                text = f"\ud83d\udcac Forwarded from {msg.forward_sender_name}:\n\n{text}"
 
             await user.send_message(DB_CHANNEL, text=text, entities=entities, reply_markup=markup, disable_web_page_preview=True)
         except Exception as e:
-            await m.reply(f"❌ Failed to forward text: {e}")
+            await m.reply(f"\u274c Failed to forward text: {e}")
         return
 
-    smsg = await m.reply("📥 Downloading...")
+    smsg = await m.reply("\ud83d\udcc5 Downloading...")
     downloaded = [0]
     start_time = time.time()
 
@@ -195,7 +204,7 @@ async def forward_message(m, msg):
         downloaded[0] = current
 
     progress_task = asyncio.create_task(update_progress(
-        smsg, lambda: downloaded[0], filesize or 1, start_time, "📥 Downloading", filename or "File"
+        smsg, lambda: downloaded[0], filesize or 1, start_time, "\ud83d\udcc5 Downloading", filename or "File"
     ))
 
     try:
@@ -203,17 +212,17 @@ async def forward_message(m, msg):
         file_path = await user.download_media(msg, file_name="downloads/", progress=download_cb)
     except Exception as e:
         progress_task.cancel()
-        await smsg.edit(f"❌ Download failed: {e}")
+        await smsg.edit(f"\u274c Download failed: {e}")
         return
 
     downloaded[0] = os.path.getsize(file_path) if os.path.exists(file_path) else 0
     progress_task.cancel()
 
     if not file_path:
-        await smsg.edit("❌ Download failed.")
+        await smsg.edit("\u274c Download failed.")
         return
 
-    await smsg.edit("📤 Uploading...")
+    await smsg.edit("\ud83d\udce4 Uploading...")
     uploaded = [0]
     start_upload = time.time()
 
@@ -221,7 +230,7 @@ async def forward_message(m, msg):
         uploaded[0] = current
 
     upload_task = asyncio.create_task(update_progress(
-        smsg, lambda: uploaded[0], os.path.getsize(file_path), start_upload, "📤 Uploading", os.path.basename(file_path)
+        smsg, lambda: uploaded[0], os.path.getsize(file_path), start_upload, "\ud83d\udce4 Uploading", os.path.basename(file_path)
     ))
 
     try:
@@ -240,10 +249,10 @@ async def forward_message(m, msg):
         elif msg_type == "Sticker":
             await user.send_sticker(DB_CHANNEL, file_path, reply_markup=markup)
         else:
-            await smsg.edit("❌ Unsupported media type.")
+            await smsg.edit("\u274c Unsupported media type.")
             return
     except Exception as e:
-        await smsg.edit(f"❌ Upload error: {e}")
+        await smsg.edit(f"\u274c Upload error: {e}")
     else:
         await smsg.delete()
         await asyncio.sleep(5)
@@ -254,4 +263,50 @@ async def forward_message(m, msg):
         except:
             pass
 
+# Admin commands for user control
+
+@bot.on_message(filters.command("allow") & filters.private)
+@is_allowed_user
+async def allow_user(_, m: Message):
+    if m.from_user.id not in ADMINS:
+        await m.reply("\ud83d\udeab Only admins can use this command.")
+        return
+    try:
+        uid = int(m.text.split()[1])
+        ALLOWED_USERS.add(uid)
+        save_users()
+        await m.reply(f"\u2705 User `{uid}` allowed.")
+    except Exception as e:
+        await m.reply(f"\u274c Error: {e}\nUse format: `/allow 123456789`", quote=True)
+
+@bot.on_message(filters.command("deny") & filters.private)
+@is_allowed_user
+async def deny_user(_, m: Message):
+    if m.from_user.id not in ADMINS:
+        await m.reply("\ud83d\udeab Only admins can use this command.")
+        return
+    try:
+        uid = int(m.text.split()[1])
+        if uid in ALLOWED_USERS:
+            ALLOWED_USERS.remove(uid)
+            save_users()
+            await m.reply(f"\ud83d\udeab User `{uid}` removed.")
+        else:
+            await m.reply("\u26a0\ufe0f User not found in allowed list.")
+    except Exception as e:
+        await m.reply(f"\u274c Error: {e}\nUse format: `/deny 123456789`", quote=True)
+
+@bot.on_message(filters.command("users") & filters.private)
+@is_allowed_user
+async def list_users(_, m: Message):
+    if m.from_user.id not in ADMINS:
+        await m.reply("\ud83d\udeab Only admins can use this command.")
+        return
+    if not ALLOWED_USERS:
+        await m.reply("No allowed users.")
+    else:
+        users = '\n'.join([f"\u2022 `{uid}`" for uid in ALLOWED_USERS])
+        await m.reply(f"\ud83d\udc65 Allowed Users:\n\n{users}")
+
 bot.run()
+
