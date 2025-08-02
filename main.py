@@ -96,17 +96,7 @@ def get_type(msg):
 # ✅ NEW: Button Extractor (Regenerate buttons manually)
 def extract_buttons(msg):
     return msg.reply_markup
-    buttons = []
-    if msg.reply_markup and hasattr(msg.reply_markup, "inline_keyboard"):
-        for row in msg.reply_markup.inline_keyboard:
-            new_row = []
-            for btn in row:
-                if btn.url:
-                    new_row.append(InlineKeyboardButton(btn.text or "🔗 Link", url=btn.url))
-            if new_row:
-                buttons.append(new_row)
-    return InlineKeyboardMarkup(buttons) if buttons else None
-
+    
 @bot.on_message(filters.command("start"))
 async def start(_, m):
     await m.reply("<blockquote>👋 Send Telegram post links. I’ll fetch & upload them to your DB channel.</blockquote>")
