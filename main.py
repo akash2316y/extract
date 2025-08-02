@@ -1,7 +1,4 @@
 
-
-import pyrogram.utils
-pyrogram.utils.MIN_CHANNEL_ID = -1009147483647
 from pyrogram import Client, filters
 from pyrogram.types import InlineKeyboardMarkup, InlineKeyboardButton, Message
 import asyncio
@@ -28,7 +25,6 @@ ALLOWED_USERS = set(DATA.get("ALLOWED_USERS", []))
 ADMINS = set(DATA.get("ADMINS", []))
 
 ANIMATION_FRAMES = [".", "..", "..."]
-BUTTONS_PER_ROW = 2  # change this to 3 or 4 if you want more buttons per row
 
 bot = Client("bot", api_id=API_ID, api_hash=API_HASH, bot_token=BOT_TOKEN)
 user = Client("user", api_id=API_ID, api_hash=API_HASH, session_string=STRING_SESSION) if STRING_SESSION else None
@@ -118,6 +114,25 @@ def get_type(msg):
     if msg.text: return "Text", None, 0
     return None, None, 0
 
+def copy_inline_keyboard(reply_markup):
+    if not reply_markup or not reply_markup.inline_keyboard:
+        return None
+
+    new_keyboard = []
+    for row in reply_markup.inline_keyboard:
+        new_row = []
+        for button in row:
+            new_row.append(InlineKeyboardButton(
+                text=button.text or "🔗 Link",
+                url=button.url if button.url else None,
+                callback_data=button.callback_data if button.callback_data else None,
+                switch_inline_query=button.switch_inline_query if button.switch_inline_query else None,
+                switch_inline_query_current_chat=button.switch_inline_query_current_chat if button.switch_inline_query_current_chat else None
+            ))
+        new_keyboard.append(new_row)
+
+    return InlineKeyboardMarkup(new_keyboard)
+
 @bot.on_message(filters.command("start"))
 @is_allowed_user
 async def start(_, m):
@@ -155,44 +170,11 @@ async def main(_, m):
         except Exception as e:
             await m.reply(f"❌ Error: {e}")
 
-def generate_buttons_from_entities(text, entities):
-    if not text or not entities:
-        return None
-
-    buttons = []
-    row = []
-
-    for ent in entities:
-        if ent.type == "text_link":
-            label = text[ent.offset: ent.offset + ent.length].strip()
-            url = ent.url
-        elif ent.type == "url":
-            label = text[ent.offset: ent.offset + ent.length].strip()
-            url = label
-        else:
-            continue
-
-        if not label:
-            label = "🔗 Link"
-        if len(label) > 30:
-            label = label[:27] + "..."
-
-        row.append(InlineKeyboardButton(label, url=url))
-
-        if len(row) >= BUTTONS_PER_ROW:
-            buttons.append(row)
-            row = []
-
-    if row:
-        buttons.append(row)
-
-    return InlineKeyboardMarkup(buttons) if buttons else None
-
 async def forward_message(m, msg):
     msg_type, filename, filesize = get_type(msg)
     text = msg.text or msg.caption or ""
+    markup = copy_inline_keyboard(msg.reply_markup)
     entities = msg.entities or msg.caption_entities
-    markup = generate_buttons_from_entities(text, entities)
 
     if msg_type == "Text" or not msg_type:
         try:
@@ -275,4 +257,5 @@ async def forward_message(m, msg):
             pass
 
 bot.run()
+
 
