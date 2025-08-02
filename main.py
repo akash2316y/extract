@@ -95,6 +95,7 @@ def get_type(msg):
 
 # ✅ NEW: Button Extractor (Regenerate buttons manually)
 def extract_buttons(msg):
+    return msg.reply_markup
     buttons = []
     if msg.reply_markup and hasattr(msg.reply_markup, "inline_keyboard"):
         for row in msg.reply_markup.inline_keyboard:
