@@ -69,7 +69,7 @@ async def update_progress(message, current_func, total, start, status, filename=
 
         text = f"""{status} {dots}
 
-📄 **{filename}**
+📄 <b>{filename}</b>
 [{bar}]
 Progress: {percent:.2f}%
 Size: {humanbytes(current)} of {humanbytes(total)}
@@ -115,8 +115,8 @@ def format_button_links(markup):
         for row in markup.inline_keyboard:
             for button in row:
                 if button.url:
-                    links.append(f"[{button.text}]({button.url})")
-    return "\n".join(links)
+                    links.append(f'<a href="{button.url}">{button.text}</a>')
+    return "<br>".join(links)
 
 @bot.on_message(filters.command("start"))
 async def start(_, m):
@@ -177,7 +177,7 @@ async def forward_message(m, msg):
                 text += f"\n\n🔗 {button_links}"
 
             if text:
-                await user.send_message(DB_CHANNEL, text, parse_mode="Markdown", disable_web_page_preview=True)
+                await user.send_message(DB_CHANNEL, text, parse_mode="HTML", disable_web_page_preview=True)
         except Exception as e:
             await m.reply(f"❌ Failed to forward message with buttons: {e}")
         return
@@ -218,17 +218,17 @@ async def forward_message(m, msg):
             caption += f"\n\n🔗 {button_links}"
 
         if msg_type == "Document":
-            await user.send_document(DB_CHANNEL, file_path, caption=caption, parse_mode="Markdown", progress=upload_cb)
+            await user.send_document(DB_CHANNEL, file_path, caption=caption, parse_mode="HTML", progress=upload_cb)
         elif msg_type == "Video":
-            await user.send_video(DB_CHANNEL, file_path, caption=caption, parse_mode="Markdown", progress=upload_cb)
+            await user.send_video(DB_CHANNEL, file_path, caption=caption, parse_mode="HTML", progress=upload_cb)
         elif msg_type == "Audio":
-            await user.send_audio(DB_CHANNEL, file_path, caption=caption, parse_mode="Markdown", progress=upload_cb)
+            await user.send_audio(DB_CHANNEL, file_path, caption=caption, parse_mode="HTML", progress=upload_cb)
         elif msg_type == "Photo":
-            await user.send_photo(DB_CHANNEL, file_path, caption=caption, parse_mode="Markdown")
+            await user.send_photo(DB_CHANNEL, file_path, caption=caption, parse_mode="HTML")
         elif msg_type == "Voice":
-            await user.send_voice(DB_CHANNEL, file_path, caption=caption, parse_mode="Markdown", progress=upload_cb)
+            await user.send_voice(DB_CHANNEL, file_path, caption=caption, parse_mode="HTML", progress=upload_cb)
         elif msg_type == "Animation":
-            await user.send_animation(DB_CHANNEL, file_path, caption=caption, parse_mode="Markdown", progress=upload_cb)
+            await user.send_animation(DB_CHANNEL, file_path, caption=caption, parse_mode="HTML", progress=upload_cb)
         elif msg_type == "Sticker":
             await user.send_sticker(DB_CHANNEL, file_path)
         else:
@@ -247,3 +247,4 @@ async def forward_message(m, msg):
             pass
 
 bot.run()
+
