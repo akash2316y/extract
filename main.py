@@ -12,7 +12,10 @@ with open('config.json', 'r') as f:
     DATA = json.load(f)
 
 def getenv(var):
-    return os.environ.get(var) or DATA.get(var)
+    val = os.environ.get(var) or DATA.get(var)
+    if var == "ADMINS" and isinstance(val, str):
+        return list(map(int, val.strip("[]").replace(" ", "").split(",")))
+    return val
 
 API_ID = int(getenv("ID"))
 API_HASH = getenv("HASH")
@@ -22,29 +25,23 @@ DB_CHANNEL = int(getenv("DB_CHANNEL"))
 ALLOWED_USERS = set(DATA.get("ALLOWED_USERS", []))
 ADMINS = set(DATA.get("ADMINS", []))
 
-# Save ALLOWED_USERS back to config
+ANIMATION_FRAMES = [".", "..", "..."]
+
+bot = Client("bot", api_id=API_ID, api_hash=API_HASH, bot_token=BOT_TOKEN)
+user = Client("user", api_id=API_ID, api_hash=API_HASH, session_string=STRING_SESSION) if STRING_SESSION else None
+if user:
+    user.start()
 
 def save_users():
     DATA["ALLOWED_USERS"] = list(ALLOWED_USERS)
     with open('config.json', 'w') as f:
         json.dump(DATA, f, indent=2)
 
-ANIMATION_FRAMES = [".", "..", "..."]
-
-# Initialize bot
-bot = Client("bot", api_id=API_ID, api_hash=API_HASH, bot_token=BOT_TOKEN)
-user = Client("user", api_id=API_ID, api_hash=API_HASH, session_string=STRING_SESSION) if STRING_SESSION else None
-if user:
-    user.start()
-
-# Decorator for allowed users
-
 def is_allowed_user(func):
     async def wrapper(client, message: Message):
         user_id = message.from_user.id
         if user_id not in ALLOWED_USERS:
             await message.reply("\ud83d\udeab You are not authorized to use this bot.")
-            print(f"[AUTH BLOCKED] Unauthorized user: {user_id}")
             return
         return await func(client, message)
     return wrapper
@@ -123,6 +120,49 @@ def get_type(msg):
 async def start(_, m):
     await m.reply("<blockquote>\ud83d\udc4b Send Telegram post links. I\u2019ll fetch & upload them to your DB channel.</blockquote>")
 
+@bot.on_message(filters.command("allow") & filters.private)
+@is_allowed_user
+async def allow_user(_, m: Message):
+    if m.from_user.id not in ADMINS:
+        await m.reply("\ud83d\udeab Only admins can use this command.")
+        return
+    try:
+        uid = int(m.text.split()[1])
+        ALLOWED_USERS.add(uid)
+        save_users()
+        await m.reply(f"\u2705 User `{uid}` allowed.")
+    except Exception as e:
+        await m.reply(f"\u274c Error: {e}\nUse format: `/allow 123456789`", quote=True)
+
+@bot.on_message(filters.command("deny") & filters.private)
+@is_allowed_user
+async def deny_user(_, m: Message):
+    if m.from_user.id not in ADMINS:
+        await m.reply("\ud83d\udeab Only admins can use this command.")
+        return
+    try:
+        uid = int(m.text.split()[1])
+        if uid in ALLOWED_USERS:
+            ALLOWED_USERS.remove(uid)
+            save_users()
+            await m.reply(f"\ud83d\udeab User `{uid}` removed.")
+        else:
+            await m.reply("\u26a0\ufe0f User not found in allowed list.")
+    except Exception as e:
+        await m.reply(f"\u274c Error: {e}\nUse format: `/deny 123456789`", quote=True)
+
+@bot.on_message(filters.command("users") & filters.private)
+@is_allowed_user
+async def list_users(_, m: Message):
+    if m.from_user.id not in ADMINS:
+        await m.reply("\ud83d\udeab Only admins can use this command.")
+        return
+    if not ALLOWED_USERS:
+        await m.reply("No allowed users.")
+    else:
+        users = '\n'.join([f"\u2022 `{uid}`" for uid in ALLOWED_USERS])
+        await m.reply(f"\ud83d\udc65 Allowed Users:\n\n{users}")
+
 @bot.on_message(filters.text)
 @is_allowed_user
 async def main(_, m):
@@ -151,9 +191,7 @@ async def main(_, m):
                         await m.reply("\u274c Need user session to access private post.")
                         return
                     msg = await user.get_messages(chat_id, msg_id)
-
                 await forward_message(m, msg)
-
         except Exception as e:
             await m.reply(f"\u274c Error: {e}")
 
@@ -175,15 +213,8 @@ async def forward_message(m, msg):
 
     if msg_type == "Text" or not msg_type:
         try:
-            if msg.text:
-                text = msg.text
-                entities = msg.entities
-            elif msg.caption:
-                text = msg.caption
-                entities = msg.caption_entities
-            else:
-                text = ""
-                entities = None
+            text = msg.text or msg.caption or ""
+            entities = msg.entities or msg.caption_entities
 
             if msg.forward_from:
                 sender = f"{msg.forward_from.first_name} {msg.forward_from.last_name or ''}".strip()
@@ -196,7 +227,7 @@ async def forward_message(m, msg):
             await m.reply(f"\u274c Failed to forward text: {e}")
         return
 
-    smsg = await m.reply("\ud83d\udcc5 Downloading...")
+    smsg = await m.reply("\ud83d\udce5 Downloading...")
     downloaded = [0]
     start_time = time.time()
 
@@ -204,7 +235,7 @@ async def forward_message(m, msg):
         downloaded[0] = current
 
     progress_task = asyncio.create_task(update_progress(
-        smsg, lambda: downloaded[0], filesize or 1, start_time, "\ud83d\udcc5 Downloading", filename or "File"
+        smsg, lambda: downloaded[0], filesize or 1, start_time, "\ud83d\udce5 Downloading", filename or "File"
     ))
 
     try:
@@ -263,50 +294,6 @@ async def forward_message(m, msg):
         except:
             pass
 
-# Admin commands for user control
-
-@bot.on_message(filters.command("allow") & filters.private)
-@is_allowed_user
-async def allow_user(_, m: Message):
-    if m.from_user.id not in ADMINS:
-        await m.reply("\ud83d\udeab Only admins can use this command.")
-        return
-    try:
-        uid = int(m.text.split()[1])
-        ALLOWED_USERS.add(uid)
-        save_users()
-        await m.reply(f"\u2705 User `{uid}` allowed.")
-    except Exception as e:
-        await m.reply(f"\u274c Error: {e}\nUse format: `/allow 123456789`", quote=True)
-
-@bot.on_message(filters.command("deny") & filters.private)
-@is_allowed_user
-async def deny_user(_, m: Message):
-    if m.from_user.id not in ADMINS:
-        await m.reply("\ud83d\udeab Only admins can use this command.")
-        return
-    try:
-        uid = int(m.text.split()[1])
-        if uid in ALLOWED_USERS:
-            ALLOWED_USERS.remove(uid)
-            save_users()
-            await m.reply(f"\ud83d\udeab User `{uid}` removed.")
-        else:
-            await m.reply("\u26a0\ufe0f User not found in allowed list.")
-    except Exception as e:
-        await m.reply(f"\u274c Error: {e}\nUse format: `/deny 123456789`", quote=True)
-
-@bot.on_message(filters.command("users") & filters.private)
-@is_allowed_user
-async def list_users(_, m: Message):
-    if m.from_user.id not in ADMINS:
-        await m.reply("\ud83d\udeab Only admins can use this command.")
-        return
-    if not ALLOWED_USERS:
-        await m.reply("No allowed users.")
-    else:
-        users = '\n'.join([f"\u2022 `{uid}`" for uid in ALLOWED_USERS])
-        await m.reply(f"\ud83d\udc65 Allowed Users:\n\n{users}")
-
 bot.run()
+
 
