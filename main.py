@@ -1,6 +1,7 @@
-
+import pyrogram.utils
+pyrogram.utils.MIN_CHANNEL_ID = -1009147483647
 from pyrogram import Client, filters
-from pyrogram.types import InlineKeyboardMarkup, InlineKeyboardButton, Message
+from pyrogram.types import InlineKeyboardMarkup, InlineKeyboardButton
 import asyncio
 import os
 import json
@@ -11,39 +12,21 @@ with open('config.json', 'r') as f:
     DATA = json.load(f)
 
 def getenv(var):
-    val = os.environ.get(var) or DATA.get(var)
-    if var == "ADMINS" and isinstance(val, str):
-        return list(map(int, val.strip("[]").replace(" ", "").split(",")))
-    return val
+    return os.environ.get(var) or DATA.get(var)
 
 API_ID = int(getenv("ID"))
 API_HASH = getenv("HASH")
 BOT_TOKEN = getenv("TOKEN")
 STRING_SESSION = getenv("STRING")
 DB_CHANNEL = int(getenv("DB_CHANNEL"))
-ALLOWED_USERS = set(DATA.get("ALLOWED_USERS", []))
-ADMINS = set(DATA.get("ADMINS", []))
 
 ANIMATION_FRAMES = [".", "..", "..."]
 
+# Initialize bot
 bot = Client("bot", api_id=API_ID, api_hash=API_HASH, bot_token=BOT_TOKEN)
 user = Client("user", api_id=API_ID, api_hash=API_HASH, session_string=STRING_SESSION) if STRING_SESSION else None
 if user:
     user.start()
-
-def save_users():
-    DATA["ALLOWED_USERS"] = list(ALLOWED_USERS)
-    with open('config.json', 'w') as f:
-        json.dump(DATA, f, indent=2)
-
-def is_allowed_user(func):
-    async def wrapper(client, message: Message):
-        user_id = message.from_user.id
-        if user_id not in ALLOWED_USERS:
-            await message.reply("🚫 You are not authorized to use this bot.")
-            return
-        return await func(client, message)
-    return wrapper
 
 def humanbytes(size):
     power = 2**10
@@ -114,32 +97,11 @@ def get_type(msg):
     if msg.text: return "Text", None, 0
     return None, None, 0
 
-def copy_inline_keyboard(reply_markup):
-    if not reply_markup or not reply_markup.inline_keyboard:
-        return None
-
-    new_keyboard = []
-    for row in reply_markup.inline_keyboard:
-        new_row = []
-        for button in row:
-            new_row.append(InlineKeyboardButton(
-                text=button.text or "🔗 Link",
-                url=button.url if button.url else None,
-                callback_data=button.callback_data if button.callback_data else None,
-                switch_inline_query=button.switch_inline_query if button.switch_inline_query else None,
-                switch_inline_query_current_chat=button.switch_inline_query_current_chat if button.switch_inline_query_current_chat else None
-            ))
-        new_keyboard.append(new_row)
-
-    return InlineKeyboardMarkup(new_keyboard)
-
 @bot.on_message(filters.command("start"))
-@is_allowed_user
 async def start(_, m):
     await m.reply("<blockquote>👋 Send Telegram post links. I’ll fetch & upload them to your DB channel.</blockquote>")
 
 @bot.on_message(filters.text)
-@is_allowed_user
 async def main(_, m):
     text = m.text.strip()
     if ("t.me/+" in text or "joinchat/" in text) and user:
@@ -166,27 +128,45 @@ async def main(_, m):
                         await m.reply("❌ Need user session to access private post.")
                         return
                     msg = await user.get_messages(chat_id, msg_id)
+
                 await forward_message(m, msg)
+
         except Exception as e:
             await m.reply(f"❌ Error: {e}")
 
+def extract_buttons(msg):
+    buttons = []
+    if msg.reply_markup and msg.reply_markup.inline_keyboard:
+        for row in msg.reply_markup.inline_keyboard:
+            new_row = []
+            for btn in row:
+                if btn.url:
+                    new_row.append(InlineKeyboardButton(btn.text, url=btn.url))
+            if new_row:
+                buttons.append(new_row)
+    return InlineKeyboardMarkup(buttons) if buttons else None
+
 async def forward_message(m, msg):
     msg_type, filename, filesize = get_type(msg)
-    text = msg.text or msg.caption or ""
-    markup = copy_inline_keyboard(msg.reply_markup)
-    entities = msg.entities or msg.caption_entities
+    markup = extract_buttons(msg)
 
     if msg_type == "Text" or not msg_type:
         try:
+            text = (msg.text or "").strip()
+            if not text and msg.reply_to_message and msg.reply_to_message.text:
+                text = msg.reply_to_message.text.strip()
+            if not text and msg.caption:
+                text = msg.caption.strip()
             if msg.forward_from:
                 sender = f"{msg.forward_from.first_name} {msg.forward_from.last_name or ''}".strip()
                 text = f"💬 Forwarded from {sender}:\n\n{text}"
             elif msg.forward_sender_name:
                 text = f"💬 Forwarded from {msg.forward_sender_name}:\n\n{text}"
 
-            await user.send_message(DB_CHANNEL, text=text, entities=entities, reply_markup=markup, disable_web_page_preview=True)
-        except Exception as e:
-            await m.reply(f"❌ Failed to forward text: {e}")
+            if text:
+                await user.send_message(DB_CHANNEL, text, entities=msg.entities, reply_markup=markup)
+        except:
+            pass
         return
 
     smsg = await m.reply("📥 Downloading...")
@@ -200,14 +180,7 @@ async def forward_message(m, msg):
         smsg, lambda: downloaded[0], filesize or 1, start_time, "📥 Downloading", filename or "File"
     ))
 
-    try:
-        msg = await user.get_messages(msg.chat.id, msg.id)
-        file_path = await user.download_media(msg, file_name="downloads/", progress=download_cb)
-    except Exception as e:
-        progress_task.cancel()
-        await smsg.edit(f"❌ Download failed: {e}")
-        return
-
+    file_path = await user.download_media(msg, file_name="downloads/", progress=download_cb)
     downloaded[0] = os.path.getsize(file_path) if os.path.exists(file_path) else 0
     progress_task.cancel()
 
@@ -257,5 +230,3 @@ async def forward_message(m, msg):
             pass
 
 bot.run()
-
-
