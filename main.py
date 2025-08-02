@@ -211,8 +211,8 @@ async def forward_message(m, chat_id, msg_id):
 
         if send_func:
             await send_func(DB_CHANNEL, file_path,
-                            caption=msg.caption,
-                            caption_entities=msg.caption_entities,
+                            caption=msg.caption.html,
+                            #caption_entities=msg.caption_entities,
                             reply_markup=markup,
                             progress=upload_cb if msg_type != "Photo" else None)
         else:
