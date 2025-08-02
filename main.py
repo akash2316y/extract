@@ -135,12 +135,14 @@ async def forward_message(m, chat_id, msg_id):
 
     try:
         msg = await user.get_messages(chat_id, msg_id)
+        print(msg)
     except Exception as e:
         await m.reply(f"❌ Cannot fetch original message: {e}")
         return
 
     msg_type, filename, filesize = get_type(msg)
     markup = extract_buttons(msg)
+    print(markup)
     
     if msg_type == "Text" or not msg_type:
         try:
