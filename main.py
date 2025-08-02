@@ -1,4 +1,5 @@
 
+
 import pyrogram.utils
 pyrogram.utils.MIN_CHANNEL_ID = -1009147483647
 from pyrogram import Client, filters
@@ -7,7 +8,6 @@ import asyncio
 import os
 import json
 import time
-import re
 
 # Load config
 with open('config.json', 'r') as f:
@@ -28,7 +28,7 @@ ALLOWED_USERS = set(DATA.get("ALLOWED_USERS", []))
 ADMINS = set(DATA.get("ADMINS", []))
 
 ANIMATION_FRAMES = [".", "..", "..."]
-BUTTONS_PER_ROW = 2  # 🧩 Buttons per row in inline keyboard
+BUTTONS_PER_ROW = 2  # change this to 3 or 4 if you want more buttons per row
 
 bot = Client("bot", api_id=API_ID, api_hash=API_HASH, bot_token=BOT_TOKEN)
 user = Client("user", api_id=API_ID, api_hash=API_HASH, session_string=STRING_SESSION) if STRING_SESSION else None
@@ -155,26 +155,29 @@ async def main(_, m):
         except Exception as e:
             await m.reply(f"❌ Error: {e}")
 
-def generate_buttons_from_text(text):
-    if not text:
+def generate_buttons_from_entities(text, entities):
+    if not text or not entities:
         return None
 
-    urls = re.findall(r"(https?://[^\s]+)", text)
     buttons = []
     row = []
 
-    for i, url in enumerate(urls):
-        pattern = rf"([^\n\[]{{1,50}})\s*{re.escape(url)}"
-        match = re.search(pattern, text)
-        label = match.group(1).strip(":- \n\t") if match else "🔗 Link"
+    for ent in entities:
+        if ent.type == "text_link":
+            label = text[ent.offset: ent.offset + ent.length].strip()
+            url = ent.url
+        elif ent.type == "url":
+            label = text[ent.offset: ent.offset + ent.length].strip()
+            url = label
+        else:
+            continue
 
         if not label:
             label = "🔗 Link"
         if len(label) > 30:
             label = label[:27] + "..."
 
-        button = InlineKeyboardButton(label, url=url)
-        row.append(button)
+        row.append(InlineKeyboardButton(label, url=url))
 
         if len(row) >= BUTTONS_PER_ROW:
             buttons.append(row)
@@ -188,12 +191,11 @@ def generate_buttons_from_text(text):
 async def forward_message(m, msg):
     msg_type, filename, filesize = get_type(msg)
     text = msg.text or msg.caption or ""
-    markup = generate_buttons_from_text(text)
+    entities = msg.entities or msg.caption_entities
+    markup = generate_buttons_from_entities(text, entities)
 
     if msg_type == "Text" or not msg_type:
         try:
-            entities = msg.entities or msg.caption_entities
-
             if msg.forward_from:
                 sender = f"{msg.forward_from.first_name} {msg.forward_from.last_name or ''}".strip()
                 text = f"💬 Forwarded from {sender}:\n\n{text}"
@@ -273,3 +275,4 @@ async def forward_message(m, msg):
             pass
 
 bot.run()
+
