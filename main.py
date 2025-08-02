@@ -1,5 +1,6 @@
 import pyrogram.utils
 pyrogram.utils.MIN_CHANNEL_ID = -1009147483647
+
 from pyrogram import Client, filters
 from pyrogram.types import InlineKeyboardMarkup, InlineKeyboardButton
 import asyncio
@@ -45,15 +46,9 @@ def time_formatter(ms):
 
 def progress_bar(current, total):
     try:
-        current = float(current)
-        total = float(total)
-        if total == 0:
-            bar = "▫️" * 10
-            percent = 0
-        else:
-            percent = current * 100 / total
-            filled = int(percent // 10)
-            bar = "▪️" * filled + "▫️" * (10 - filled)
+        percent = current * 100 / total if total else 0
+        filled = int(percent // 10)
+        bar = "▪️" * filled + "▫️" * (10 - filled)
         return bar, percent
     except:
         return "▫️" * 10, 0
@@ -122,15 +117,9 @@ async def main(_, m):
 
             for msg_id in range(from_id, to_id + 1):
                 try:
-                    msg = await (user.get_messages if "t.me/c/" in text else bot.get_messages)(chat_id, msg_id)
-                except:
-                    if not user:
-                        await m.reply("❌ Need user session to access private post.")
-                        return
-                    msg = await user.get_messages(chat_id, msg_id)
-
-                await forward_message(m, msg)
-
+                    await forward_message(m, chat_id, msg_id)
+                except Exception as e:
+                    await m.reply(f"❌ Failed to process message {msg_id}: {e}")
         except Exception as e:
             await m.reply(f"❌ Error: {e}")
 
@@ -141,22 +130,30 @@ def extract_buttons(msg):
             new_row = []
             for btn in row:
                 if btn.url:
-                    new_row.append(InlineKeyboardButton(btn.text, url=btn.url))
+                    new_row.append(InlineKeyboardButton(btn.text or "🔗 Link", url=btn.url))
             if new_row:
                 buttons.append(new_row)
     return InlineKeyboardMarkup(buttons) if buttons else None
 
-async def forward_message(m, msg):
+async def forward_message(m, chat_id, msg_id):
+    if not user:
+        await m.reply("❌ User session required.")
+        return
+
+    try:
+        msg = await user.get_messages(chat_id, msg_id)
+    except Exception as e:
+        await m.reply(f"❌ Cannot fetch original message: {e}")
+        return
+
     msg_type, filename, filesize = get_type(msg)
     markup = extract_buttons(msg)
 
     if msg_type == "Text" or not msg_type:
         try:
-            text = (msg.text or "").strip()
+            text = (msg.text or msg.caption or "").strip()
             if not text and msg.reply_to_message and msg.reply_to_message.text:
                 text = msg.reply_to_message.text.strip()
-            if not text and msg.caption:
-                text = msg.caption.strip()
             if msg.forward_from:
                 sender = f"{msg.forward_from.first_name} {msg.forward_from.last_name or ''}".strip()
                 text = f"💬 Forwarded from {sender}:\n\n{text}"
@@ -180,7 +177,16 @@ async def forward_message(m, msg):
         smsg, lambda: downloaded[0], filesize or 1, start_time, "📥 Downloading", filename or "File"
     ))
 
-    file_path = await user.download_media(msg, file_name="downloads/", progress=download_cb)
+    try:
+        # ⚠️ Re-fetch the message to get a fresh file reference
+        msg = await user.get_messages(chat_id, msg_id)
+
+        file_path = await user.download_media(msg, file_name="downloads/", progress=download_cb)
+    except Exception as e:
+        progress_task.cancel()
+        await smsg.edit(f"❌ Download error: {e}")
+        return
+
     downloaded[0] = os.path.getsize(file_path) if os.path.exists(file_path) else 0
     progress_task.cancel()
 
@@ -200,20 +206,22 @@ async def forward_message(m, msg):
     ))
 
     try:
-        if msg_type == "Document":
-            await user.send_document(DB_CHANNEL, file_path, caption=msg.caption, caption_entities=msg.caption_entities, reply_markup=markup, progress=upload_cb)
-        elif msg_type == "Video":
-            await user.send_video(DB_CHANNEL, file_path, caption=msg.caption, caption_entities=msg.caption_entities, reply_markup=markup, progress=upload_cb)
-        elif msg_type == "Audio":
-            await user.send_audio(DB_CHANNEL, file_path, caption=msg.caption, caption_entities=msg.caption_entities, reply_markup=markup, progress=upload_cb)
-        elif msg_type == "Photo":
-            await user.send_photo(DB_CHANNEL, file_path, caption=msg.caption, caption_entities=msg.caption_entities, reply_markup=markup)
-        elif msg_type == "Voice":
-            await user.send_voice(DB_CHANNEL, file_path, caption=msg.caption, caption_entities=msg.caption_entities, reply_markup=markup, progress=upload_cb)
-        elif msg_type == "Animation":
-            await user.send_animation(DB_CHANNEL, file_path, caption=msg.caption, caption_entities=msg.caption_entities, reply_markup=markup, progress=upload_cb)
-        elif msg_type == "Sticker":
-            await user.send_sticker(DB_CHANNEL, file_path, reply_markup=markup)
+        send_func = {
+            "Document": user.send_document,
+            "Video": user.send_video,
+            "Audio": user.send_audio,
+            "Photo": user.send_photo,
+            "Voice": user.send_voice,
+            "Animation": user.send_animation,
+            "Sticker": user.send_sticker,
+        }.get(msg_type)
+
+        if send_func:
+            await send_func(DB_CHANNEL, file_path,
+                            caption=msg.caption,
+                            caption_entities=msg.caption_entities,
+                            reply_markup=markup,
+                            progress=upload_cb if msg_type != "Photo" else None)
         else:
             await smsg.edit("❌ Unsupported media type.")
             return
