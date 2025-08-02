@@ -1,4 +1,3 @@
-
 import pyrogram.utils
 pyrogram.utils.MIN_CHANNEL_ID = -1009147483647
 from pyrogram import Client, filters
@@ -23,6 +22,7 @@ DB_CHANNEL = int(getenv("DB_CHANNEL"))
 
 ANIMATION_FRAMES = [".", "..", "..."]
 
+# Initialize bot
 bot = Client("bot", api_id=API_ID, api_hash=API_HASH, bot_token=BOT_TOKEN)
 user = Client("user", api_id=API_ID, api_hash=API_HASH, session_string=STRING_SESSION) if STRING_SESSION else None
 if user:
@@ -97,6 +97,27 @@ def get_type(msg):
     if msg.text: return "Text", None, 0
     return None, None, 0
 
+def extract_buttons(msg):
+    buttons = []
+    if msg.reply_markup and msg.reply_markup.inline_keyboard:
+        for row in msg.reply_markup.inline_keyboard:
+            new_row = []
+            for btn in row:
+                if btn.url:
+                    new_row.append(InlineKeyboardButton(btn.text, url=btn.url))
+            if new_row:
+                buttons.append(new_row)
+    return InlineKeyboardMarkup(buttons) if buttons else None
+
+def format_button_links(markup):
+    links = []
+    if markup and markup.inline_keyboard:
+        for row in markup.inline_keyboard:
+            for button in row:
+                if button.url:
+                    links.append(f"[{button.text}]({button.url})")
+    return "\n".join(links)
+
 @bot.on_message(filters.command("start"))
 async def start(_, m):
     await m.reply("<blockquote>👋 Send Telegram post links. I’ll fetch & upload them to your DB channel.</blockquote>")
@@ -134,21 +155,10 @@ async def main(_, m):
         except Exception as e:
             await m.reply(f"❌ Error: {e}")
 
-def extract_buttons(msg):
-    buttons = []
-    if msg.reply_markup and msg.reply_markup.inline_keyboard:
-        for row in msg.reply_markup.inline_keyboard:
-            new_row = []
-            for btn in row:
-                if btn.url:
-                    new_row.append(InlineKeyboardButton(btn.text, url=btn.url))
-            if new_row:
-                buttons.append(new_row)
-    return InlineKeyboardMarkup(buttons) if buttons else None
-
 async def forward_message(m, msg):
     msg_type, filename, filesize = get_type(msg)
     markup = extract_buttons(msg)
+    button_links = format_button_links(markup)
 
     if msg_type == "Text" or not msg_type:
         try:
@@ -163,28 +173,24 @@ async def forward_message(m, msg):
             elif msg.forward_sender_name:
                 text = f"💬 Forwarded from {msg.forward_sender_name}:\n\n{text}"
 
+            if button_links:
+                text += f"\n\n🔗 {button_links}"
+
             if text:
-                await user.send_message(DB_CHANNEL, text, entities=msg.entities, reply_markup=markup)
-        except:
-            pass
+                await user.send_message(DB_CHANNEL, text, parse_mode="Markdown", disable_web_page_preview=True)
+        except Exception as e:
+            await m.reply(f"❌ Failed to forward message with buttons: {e}")
         return
 
-    smsg = await m.reply("📥 Downloading...")
+    smsg = await m.reply("📅 Downloading...")
     downloaded = [0]
     start_time = time.time()
 
     async def download_cb(current, total):
         downloaded[0] = current
 
-    # 🛠️ Re-fetch to renew expired file reference
-    try:
-        msg = await user.get_messages(msg.chat.id, msg.id)
-    except Exception as e:
-        await smsg.edit(f"❌ Error fetching message: {e}")
-        return
-
     progress_task = asyncio.create_task(update_progress(
-        smsg, lambda: downloaded[0], filesize or 1, start_time, "📥 Downloading", filename or "File"
+        smsg, lambda: downloaded[0], filesize or 1, start_time, "📅 Downloading", filename or "File"
     ))
 
     file_path = await user.download_media(msg, file_name="downloads/", progress=download_cb)
@@ -195,7 +201,7 @@ async def forward_message(m, msg):
         await smsg.edit("❌ Download failed.")
         return
 
-    await smsg.edit("📤 Uploading...")
+    await smsg.edit("📄 Uploading...")
     uploaded = [0]
     start_upload = time.time()
 
@@ -203,24 +209,28 @@ async def forward_message(m, msg):
         uploaded[0] = current
 
     upload_task = asyncio.create_task(update_progress(
-        smsg, lambda: uploaded[0], os.path.getsize(file_path), start_upload, "📤 Uploading", os.path.basename(file_path)
+        smsg, lambda: uploaded[0], os.path.getsize(file_path), start_upload, "📄 Uploading", os.path.basename(file_path)
     ))
 
     try:
+        caption = msg.caption or ""
+        if button_links:
+            caption += f"\n\n🔗 {button_links}"
+
         if msg_type == "Document":
-            await user.send_document(DB_CHANNEL, file_path, caption=msg.caption, caption_entities=msg.caption_entities, reply_markup=markup, progress=upload_cb)
+            await user.send_document(DB_CHANNEL, file_path, caption=caption, parse_mode="Markdown", progress=upload_cb)
         elif msg_type == "Video":
-            await user.send_video(DB_CHANNEL, file_path, caption=msg.caption, caption_entities=msg.caption_entities, reply_markup=markup, progress=upload_cb)
+            await user.send_video(DB_CHANNEL, file_path, caption=caption, parse_mode="Markdown", progress=upload_cb)
         elif msg_type == "Audio":
-            await user.send_audio(DB_CHANNEL, file_path, caption=msg.caption, caption_entities=msg.caption_entities, reply_markup=markup, progress=upload_cb)
+            await user.send_audio(DB_CHANNEL, file_path, caption=caption, parse_mode="Markdown", progress=upload_cb)
         elif msg_type == "Photo":
-            await user.send_photo(DB_CHANNEL, file_path, caption=msg.caption, caption_entities=msg.caption_entities, reply_markup=markup)
+            await user.send_photo(DB_CHANNEL, file_path, caption=caption, parse_mode="Markdown")
         elif msg_type == "Voice":
-            await user.send_voice(DB_CHANNEL, file_path, caption=msg.caption, caption_entities=msg.caption_entities, reply_markup=markup, progress=upload_cb)
+            await user.send_voice(DB_CHANNEL, file_path, caption=caption, parse_mode="Markdown", progress=upload_cb)
         elif msg_type == "Animation":
-            await user.send_animation(DB_CHANNEL, file_path, caption=msg.caption, caption_entities=msg.caption_entities, reply_markup=markup, progress=upload_cb)
+            await user.send_animation(DB_CHANNEL, file_path, caption=caption, parse_mode="Markdown", progress=upload_cb)
         elif msg_type == "Sticker":
-            await user.send_sticker(DB_CHANNEL, file_path, reply_markup=markup)
+            await user.send_sticker(DB_CHANNEL, file_path)
         else:
             await smsg.edit("❌ Unsupported media type.")
             return
@@ -237,4 +247,3 @@ async def forward_message(m, msg):
             pass
 
 bot.run()
-
