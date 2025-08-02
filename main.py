@@ -22,7 +22,6 @@ DB_CHANNEL = int(getenv("DB_CHANNEL"))
 
 ANIMATION_FRAMES = [".", "..", "..."]
 
-# Initialize clients
 bot = Client("bot", api_id=API_ID, api_hash=API_HASH, bot_token=BOT_TOKEN)
 user = Client("user", api_id=API_ID, api_hash=API_HASH, session_string=STRING_SESSION) if STRING_SESSION else None
 if user:
@@ -47,13 +46,9 @@ def progress_bar(current, total):
     try:
         current = float(current)
         total = float(total)
-        if total == 0:
-            bar = "▫️" * 10
-            percent = 0
-        else:
-            percent = current * 100 / total
-            filled = int(percent // 10)
-            bar = "▪️" * filled + "▫️" * (10 - filled)
+        percent = current * 100 / total if total else 0
+        filled = int(percent // 10)
+        bar = "▪️" * filled + "▫️" * (10 - filled)
         return bar, percent
     except:
         return "▫️" * 10, 0
@@ -99,7 +94,7 @@ def get_type(msg):
 
 @bot.on_message(filters.command("start"))
 async def start(_, m):
-    await m.reply("👋 Send a Telegram post link. I'll fetch it and upload it to the DB channel.")
+    await m.reply("<blockquote>👋 Send Telegram post links. I’ll fetch & upload them to your DB channel.</blockquote>")
 
 @bot.on_message(filters.text)
 async def main(_, m):
@@ -120,16 +115,14 @@ async def main(_, m):
             to_id = int(temp[1]) if len(temp) > 1 else from_id
             chat_id = int("-100" + parts[4]) if "t.me/c/" in text else parts[3]
 
-            if not user:
-                await m.reply("❌ User session required.")
-                return
-
             for msg_id in range(from_id, to_id + 1):
                 try:
+                    msg = await (user.get_messages if "t.me/c/" in text else bot.get_messages)(chat_id, msg_id)
+                except:
+                    if not user:
+                        await m.reply("❌ Need user session to access private post.")
+                        return
                     msg = await user.get_messages(chat_id, msg_id)
-                except Exception as e:
-                    await m.reply(f"❌ Error fetching message {msg_id}: {e}")
-                    continue
 
                 await forward_message(m, msg)
 
@@ -142,28 +135,15 @@ def extract_buttons(msg):
         for row in msg.reply_markup.inline_keyboard:
             new_row = []
             for btn in row:
-                try:
-                    if btn.url:
-                        new_row.append(InlineKeyboardButton(btn.text or "🔗 Link", url=btn.url))
-                except:
-                    pass
+                if btn.url:
+                    new_row.append(InlineKeyboardButton(btn.text or "🔗 Link", url=btn.url))
             if new_row:
                 buttons.append(new_row)
     return InlineKeyboardMarkup(buttons) if buttons else None
 
-def extract_button_links_as_text(msg):
-    links = []
-    if msg.reply_markup and msg.reply_markup.inline_keyboard:
-        for row in msg.reply_markup.inline_keyboard:
-            for btn in row:
-                if btn.url:
-                    links.append(f"🔗 [{btn.text}]({btn.url})")
-    return "\n".join(links)
-
 async def forward_message(m, msg):
     msg_type, filename, filesize = get_type(msg)
     markup = extract_buttons(msg)
-    buttons_text = extract_button_links_as_text(msg)
 
     if msg_type == "Text" or not msg_type:
         try:
@@ -183,11 +163,7 @@ async def forward_message(m, msg):
             elif msg.forward_sender_name:
                 text = f"💬 Forwarded from {msg.forward_sender_name}:\n\n{text}"
 
-            if buttons_text:
-                text += f"\n\n{buttons_text}"
-
-            if text:
-                await user.send_message(DB_CHANNEL, text=text, entities=entities, disable_web_page_preview=True)
+            await user.send_message(DB_CHANNEL, text=text, entities=entities, reply_markup=markup, disable_web_page_preview=True)
         except Exception as e:
             await m.reply(f"❌ Failed to forward text: {e}")
         return
@@ -203,13 +179,7 @@ async def forward_message(m, msg):
         smsg, lambda: downloaded[0], filesize or 1, start_time, "📥 Downloading", filename or "File"
     ))
 
-    try:
-        file_path = await user.download_media(msg, file_name="downloads/", progress=download_cb)
-    except Exception as e:
-        progress_task.cancel()
-        await smsg.edit(f"❌ Download failed: {e}")
-        return
-
+    file_path = await user.download_media(msg, file_name="downloads/", progress=download_cb)
     downloaded[0] = os.path.getsize(file_path) if os.path.exists(file_path) else 0
     progress_task.cancel()
 
@@ -229,22 +199,24 @@ async def forward_message(m, msg):
     ))
 
     try:
-        caption = msg.caption or ""
-        if buttons_text:
-            caption += f"\n\n{buttons_text}"
-
+        send_kwargs = dict(
+            caption=msg.caption,
+            caption_entities=msg.caption_entities,
+            reply_markup=markup,
+            progress=upload_cb
+        )
         if msg_type == "Document":
-            await user.send_document(DB_CHANNEL, file_path, caption=caption, caption_entities=msg.caption_entities, reply_markup=markup, progress=upload_cb)
+            await user.send_document(DB_CHANNEL, file_path, **send_kwargs)
         elif msg_type == "Video":
-            await user.send_video(DB_CHANNEL, file_path, caption=caption, caption_entities=msg.caption_entities, reply_markup=markup, progress=upload_cb)
+            await user.send_video(DB_CHANNEL, file_path, **send_kwargs)
         elif msg_type == "Audio":
-            await user.send_audio(DB_CHANNEL, file_path, caption=caption, caption_entities=msg.caption_entities, reply_markup=markup, progress=upload_cb)
+            await user.send_audio(DB_CHANNEL, file_path, **send_kwargs)
         elif msg_type == "Photo":
-            await user.send_photo(DB_CHANNEL, file_path, caption=caption, caption_entities=msg.caption_entities, reply_markup=markup)
+            await user.send_photo(DB_CHANNEL, file_path, caption=msg.caption, caption_entities=msg.caption_entities, reply_markup=markup)
         elif msg_type == "Voice":
-            await user.send_voice(DB_CHANNEL, file_path, caption=caption, caption_entities=msg.caption_entities, reply_markup=markup, progress=upload_cb)
+            await user.send_voice(DB_CHANNEL, file_path, **send_kwargs)
         elif msg_type == "Animation":
-            await user.send_animation(DB_CHANNEL, file_path, caption=caption, caption_entities=msg.caption_entities, reply_markup=markup, progress=upload_cb)
+            await user.send_animation(DB_CHANNEL, file_path, **send_kwargs)
         elif msg_type == "Sticker":
             await user.send_sticker(DB_CHANNEL, file_path, reply_markup=markup)
         else:
