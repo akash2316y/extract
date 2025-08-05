@@ -92,7 +92,6 @@ def get_type(msg):
     return None, None, 0
 
 def extract_buttons(msg):
-    print("\n[DEBUG] reply_markup raw data:\n", msg.reply_markup, "\n")
     if not msg.reply_markup:
         return None
 
@@ -100,11 +99,17 @@ def extract_buttons(msg):
     for row in msg.reply_markup.inline_keyboard:
         btn_row = []
         for btn in row:
-            print(f"[DEBUG] Button found → text: {btn.text}, url: {btn.url}")
-            btn_row.append(InlineKeyboardButton(text=btn.text, url=btn.url if btn.url else None))
-        keyboard.append(btn_row)
+            if btn.url:  # only add buttons with URLs
+                btn_row.append(InlineKeyboardButton(text=btn.text, url=btn.url))
+            elif btn.callback_data:
+                btn_row.append(InlineKeyboardButton(text=btn.text, callback_data=btn.callback_data))
+            elif btn.switch_inline_query:
+                btn_row.append(InlineKeyboardButton(text=btn.text, switch_inline_query=btn.switch_inline_query))
+            # ignore buttons with all values None
+        if btn_row:
+            keyboard.append(btn_row)
 
-    return InlineKeyboardMarkup(keyboard)
+    return InlineKeyboardMarkup(keyboard) if keyboard else None
 
 @bot.on_message(filters.command("start"))
 async def start(_, m):
