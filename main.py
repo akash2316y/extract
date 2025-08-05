@@ -94,8 +94,7 @@ def get_type(msg):
 
 # ✅ Fixed: Button Extractor
 def extract_buttons(msg):
-    print("\n[DEBUG] reply_markup raw data:\n", msg.reply_markup, "\n")  # 🔍 Debug print
-
+    print("\n[DEBUG] reply_markup raw data:\n", msg.reply_markup, "\n")
     if not msg.reply_markup:
         return None
 
@@ -103,8 +102,12 @@ def extract_buttons(msg):
     for row in msg.reply_markup.inline_keyboard:
         btn_row = []
         for btn in row:
-            print(f"[DEBUG] Button found → text: {btn.text}")
+            print(f"[DEBUG] Button found → text: {btn.text}, url: {btn.url}")
+            btn_row.append(InlineKeyboardButton(text=btn.text, url=btn.url if btn.url else None))
+        keyboard.append(btn_row)
 
+    return InlineKeyboardMarkup(keyboard)
+    
 @bot.on_message(filters.command("start"))
 async def start(_, m):
     await m.reply("<blockquote>👋 Send Telegram post links. I’ll fetch & upload them to your DB channel.</blockquote>")
