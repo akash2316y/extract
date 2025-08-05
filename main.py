@@ -103,7 +103,7 @@ def extract_buttons(msg):
     for row in msg.reply_markup.inline_keyboard:
         btn_row = []
         for btn in row:
-            print(f"[DEBUG] Button found → text: {btn.text
+            print("[DEBUG] Button found → text: {btn.text
 
 @bot.on_message(filters.command("start"))
 async def start(_, m):
