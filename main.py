@@ -1,4 +1,3 @@
-
 import pyrogram.utils
 pyrogram.utils.MIN_CHANNEL_ID = -1009147483647
 
@@ -93,10 +92,18 @@ def get_type(msg):
     if msg.text: return "Text", None, 0
     return None, None, 0
 
-# ✅ NEW: Button Extractor (Regenerate buttons manually)
+# ✅ Fixed: Button Extractor
 def extract_buttons(msg):
-    return msg.reply_markup
-    
+    if not msg.reply_markup:
+        return None
+    keyboard = []
+    for row in msg.reply_markup.inline_keyboard:
+        btn_row = []
+        for btn in row:
+            btn_row.append(InlineKeyboardButton(text=btn.text, url=btn.url if btn.url else None))
+        keyboard.append(btn_row)
+    return InlineKeyboardMarkup(keyboard)
+
 @bot.on_message(filters.command("start"))
 async def start(_, m):
     await m.reply("<blockquote>👋 Send Telegram post links. I’ll fetch & upload them to your DB channel.</blockquote>")
@@ -212,9 +219,7 @@ async def forward_message(m, chat_id, msg_id):
         if send_func:
             await send_func(DB_CHANNEL, file_path,
                             caption=msg.caption.html,
-                            #caption_entities=msg.caption_entities,
-                            reply_markup=msg.reply_markup,)
-                            #progress=upload_cb if msg_type != "Photo" else None)
+                            reply_markup=markup)
         else:
             await smsg.edit("❌ Unsupported media type.")
             return
@@ -231,4 +236,3 @@ async def forward_message(m, chat_id, msg_id):
             pass
 
 bot.run()
-
