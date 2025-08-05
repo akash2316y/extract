@@ -1,3 +1,4 @@
+
 import pyrogram.utils
 pyrogram.utils.MIN_CHANNEL_ID = -1009147483647
 
@@ -23,6 +24,7 @@ DB_CHANNEL = int(getenv("DB_CHANNEL"))
 
 ANIMATION_FRAMES = [".", "..", "..."]
 
+# Initialize bot
 bot = Client("bot", api_id=API_ID, api_hash=API_HASH, bot_token=BOT_TOKEN)
 user = Client("user", api_id=API_ID, api_hash=API_HASH, session_string=STRING_SESSION) if STRING_SESSION else None
 if user:
@@ -91,6 +93,7 @@ def get_type(msg):
     if msg.text: return "Text", None, 0
     return None, None, 0
 
+# ✅ NEW: Button Extractor (Regenerate buttons manually)
 def extract_buttons(msg):
     if not msg.reply_markup:
         return None
@@ -111,6 +114,14 @@ def extract_buttons(msg):
 
     return InlineKeyboardMarkup(keyboard) if keyboard else None
 
+@bot.on_message(filters.command("testbtn"))
+async def test_btn(_, m):
+    markup = InlineKeyboardMarkup(
+        [[InlineKeyboardButton("🔗 Google", url="https://google.com")]]
+    )
+    await user.send_message(DB_CHANNEL, "Test button working?", reply_markup=markup)
+    await m.reply("✅ Sent.")
+    
 @bot.on_message(filters.command("start"))
 async def start(_, m):
     await m.reply("<blockquote>👋 Send Telegram post links. I’ll fetch & upload them to your DB channel.</blockquote>")
@@ -156,18 +167,8 @@ async def forward_message(m, chat_id, msg_id):
 
     msg_type, filename, filesize = get_type(msg)
     markup = extract_buttons(msg)
-    print("[DEBUG] Final extracted markup:", markup)
-
-    # ✅ Inline button test block
-    test_markup = InlineKeyboardMarkup(
-        [[InlineKeyboardButton("✅ Test Google", url="https://google.com")]]
-    )
-    try:
-        await user.send_message(DB_CHANNEL, "🧪 Test: Inline Button Example", reply_markup=test_markup)
-        print("✅ Test inline button sent to DB_CHANNEL.")
-    except Exception as e:
-        print("❌ Failed to send test inline button:", e)
-
+    print(markup)
+    
     if msg_type == "Text" or not msg_type:
         try:
             text = (msg.text or msg.caption or "").strip()
@@ -197,7 +198,7 @@ async def forward_message(m, chat_id, msg_id):
     ))
 
     try:
-        msg = await user.get_messages(chat_id, msg_id)
+        msg = await user.get_messages(chat_id, msg_id)  # Refetch
         file_path = await user.download_media(msg, file_name="downloads/", progress=download_cb)
     except Exception as e:
         progress_task.cancel()
@@ -234,13 +235,11 @@ async def forward_message(m, chat_id, msg_id):
         }.get(msg_type)
 
         if send_func:
-            await send_func(
-                chat_id=DB_CHANNEL,
-                file_name=os.path.basename(file_path) if msg_type == "Document" else None,
-                caption=msg.caption or "",
-                caption_entities=msg.caption_entities,
-                reply_markup=markup
-            )
+            await send_func(DB_CHANNEL, file_path,
+                            caption=msg.caption.html,
+                            #caption_entities=msg.caption_entities,
+                            reply_markup=msg.reply_markup,)
+                            #progress=upload_cb if msg_type != "Photo" else None)
         else:
             await smsg.edit("❌ Unsupported media type.")
             return
@@ -257,3 +256,4 @@ async def forward_message(m, chat_id, msg_id):
             pass
 
 bot.run()
+
