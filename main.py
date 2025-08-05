@@ -23,7 +23,6 @@ DB_CHANNEL = int(getenv("DB_CHANNEL"))
 
 ANIMATION_FRAMES = [".", "..", "..."]
 
-# Initialize bot
 bot = Client("bot", api_id=API_ID, api_hash=API_HASH, bot_token=BOT_TOKEN)
 user = Client("user", api_id=API_ID, api_hash=API_HASH, session_string=STRING_SESSION) if STRING_SESSION else None
 if user:
@@ -106,7 +105,7 @@ def extract_buttons(msg):
         keyboard.append(btn_row)
 
     return InlineKeyboardMarkup(keyboard)
-    
+
 @bot.on_message(filters.command("start"))
 async def start(_, m):
     await m.reply("<blockquote>👋 Send Telegram post links. I’ll fetch & upload them to your DB channel.</blockquote>")
@@ -152,8 +151,18 @@ async def forward_message(m, chat_id, msg_id):
 
     msg_type, filename, filesize = get_type(msg)
     markup = extract_buttons(msg)
-    print(markup)
-    
+    print("[DEBUG] Final extracted markup:", markup)
+
+    # ✅ Inline button test block
+    test_markup = InlineKeyboardMarkup(
+        [[InlineKeyboardButton("✅ Test Google", url="https://google.com")]]
+    )
+    try:
+        await user.send_message(DB_CHANNEL, "🧪 Test: Inline Button Example", reply_markup=test_markup)
+        print("✅ Test inline button sent to DB_CHANNEL.")
+    except Exception as e:
+        print("❌ Failed to send test inline button:", e)
+
     if msg_type == "Text" or not msg_type:
         try:
             text = (msg.text or msg.caption or "").strip()
@@ -183,7 +192,7 @@ async def forward_message(m, chat_id, msg_id):
     ))
 
     try:
-        msg = await user.get_messages(chat_id, msg_id)  # Refetch
+        msg = await user.get_messages(chat_id, msg_id)
         file_path = await user.download_media(msg, file_name="downloads/", progress=download_cb)
     except Exception as e:
         progress_task.cancel()
