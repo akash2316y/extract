@@ -92,7 +92,6 @@ def get_type(msg):
     if msg.text: return "Text", None, 0
     return None, None, 0
 
-# ✅ Fixed: Button Extractor
 def extract_buttons(msg):
     print("\n[DEBUG] reply_markup raw data:\n", msg.reply_markup, "\n")
     if not msg.reply_markup:
@@ -221,9 +220,13 @@ async def forward_message(m, chat_id, msg_id):
         }.get(msg_type)
 
         if send_func:
-            await send_func(DB_CHANNEL, file_path,
-                            caption=msg.caption.html,
-                            reply_markup=markup)
+            await send_func(
+                chat_id=DB_CHANNEL,
+                file_name=os.path.basename(file_path) if msg_type == "Document" else None,
+                caption=msg.caption or "",
+                caption_entities=msg.caption_entities,
+                reply_markup=markup
+            )
         else:
             await smsg.edit("❌ Unsupported media type.")
             return
