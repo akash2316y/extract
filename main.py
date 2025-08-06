@@ -1,4 +1,3 @@
-
 import pyrogram.utils
 pyrogram.utils.MIN_CHANNEL_ID = -1009147483647
 
@@ -135,15 +134,14 @@ async def forward_message(m, chat_id, msg_id):
 
     try:
         msg = await user.get_messages(chat_id, msg_id)
-        print(msg)
     except Exception as e:
         await m.reply(f"❌ Cannot fetch original message: {e}")
         return
 
     msg_type, filename, filesize = get_type(msg)
     markup = extract_buttons(msg)
-    print(markup)
-    
+
+    # For text-only messages
     if msg_type == "Text" or not msg_type:
         try:
             text = (msg.text or msg.caption or "").strip()
@@ -156,9 +154,14 @@ async def forward_message(m, chat_id, msg_id):
                 text = f"💬 Forwarded from {msg.forward_sender_name}:\n\n{text}"
 
             if text:
-                await bot.send_message(DB_CHANNEL, text, entities=msg.entities, reply_markup=markup)
-        except:
-            pass
+                await bot.send_message(
+                    DB_CHANNEL,
+                    text,
+                    entities=msg.entities,
+                    reply_markup=markup
+                )
+        except Exception as e:
+            await m.reply(f"❌ Failed to send text: {e}")
         return
 
     smsg = await m.reply("📥 Downloading...")
@@ -173,7 +176,6 @@ async def forward_message(m, chat_id, msg_id):
     ))
 
     try:
-        msg = await user.get_messages(chat_id, msg_id)  # Refetch
         file_path = await user.download_media(msg, file_name="downloads/", progress=download_cb)
     except Exception as e:
         progress_task.cancel()
@@ -199,22 +201,25 @@ async def forward_message(m, chat_id, msg_id):
     ))
 
     try:
+        # Use bot session to send the file with original markup
         send_func = {
-            "Document": user.send_document,
-            "Video": user.send_video,
-            "Audio": user.send_audio,
-            "Photo": user.send_photo,
-            "Voice": user.send_voice,
-            "Animation": user.send_animation,
-            "Sticker": user.send_sticker,
+            "Document": bot.send_document,
+            "Video": bot.send_video,
+            "Audio": bot.send_audio,
+            "Photo": bot.send_photo,
+            "Voice": bot.send_voice,
+            "Animation": bot.send_animation,
+            "Sticker": bot.send_sticker,
         }.get(msg_type)
 
         if send_func:
-            await send_func(DB_CHANNEL, file_path,
-                            caption=msg.caption.html,
-                            #caption_entities=msg.caption_entities,
-                            reply_markup=msg.reply_markup,)
-                            #progress=upload_cb if msg_type != "Photo" else None)
+            await send_func(
+                DB_CHANNEL,
+                file_path,
+                caption=msg.caption or None,
+                caption_entities=msg.caption_entities,
+                reply_markup=markup
+            )
         else:
             await smsg.edit("❌ Unsupported media type.")
             return
