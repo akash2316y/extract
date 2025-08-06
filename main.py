@@ -23,7 +23,7 @@ DB_CHANNEL = int(getenv("DB_CHANNEL"))
 
 ANIMATION_FRAMES = [".", "..", "..."]
 
-# Initialize bot
+# Initialize bot and user client
 bot = Client("bot", api_id=API_ID, api_hash=API_HASH, bot_token=BOT_TOKEN)
 user = Client("user", api_id=API_ID, api_hash=API_HASH, session_string=STRING_SESSION) if STRING_SESSION else None
 if user:
@@ -95,14 +95,12 @@ def get_type(msg):
 def extract_buttons(msg):
     if not msg.reply_markup:
         return None
-
     keyboard = []
     for row in msg.reply_markup.inline_keyboard:
         btn_row = []
         for btn in row:
             btn_row.append(InlineKeyboardButton(text=btn.text, url=btn.url if btn.url else None))
         keyboard.append(btn_row)
-
     return InlineKeyboardMarkup(keyboard)
 
 @bot.on_message(filters.command("start"))
@@ -157,17 +155,21 @@ async def forward_message(m, chat_id, msg_id):
                 text = msg.reply_to_message.text.strip()
             if msg.forward_from:
                 sender = f"{msg.forward_from.first_name} {msg.forward_from.last_name or ''}".strip()
-                text = f"💬 Forwarded from {sender}:\n{text}"
+                text = f"💬 Forwarded from {sender}:
+\n{text}"
             elif msg.forward_sender_name:
-                text = f"💬 Forwarded from {msg.forward_sender_name}:\n{text}"
+                text = f"💬 Forwarded from {msg.forward_sender_name}:
+\n{text}"
 
-            if text:
+            if markup:
                 await bot.send_message(DB_CHANNEL, text, entities=msg.entities, reply_markup=markup)
+            else:
+                await user.send_message(DB_CHANNEL, text, entities=msg.entities)
         except Exception as e:
-            await m.reply(f"❌ Failed to send text: {e}")
+            await m.reply(f"Failed to send text: {e}")
         return
 
-    smsg = await m.reply("📥 Downloading...")
+    smsg = await m.reply("📅 Downloading...")
     downloaded = [0]
     start_time = time.time()
 
@@ -175,11 +177,11 @@ async def forward_message(m, chat_id, msg_id):
         downloaded[0] = current
 
     progress_task = asyncio.create_task(update_progress(
-        smsg, lambda: downloaded[0], filesize or 1, start_time, "📥 Downloading", filename or "File"
+        smsg, lambda: downloaded[0], filesize or 1, start_time, "📅 Downloading", filename or "File"
     ))
 
     try:
-        msg = await user.get_messages(chat_id, msg_id)
+        msg = await user.get_messages(chat_id, msg_id)  # Refetch
         file_path = await user.download_media(msg, file_name="downloads/", progress=download_cb)
     except Exception as e:
         progress_task.cancel()
@@ -206,26 +208,24 @@ async def forward_message(m, chat_id, msg_id):
 
     try:
         send_func = {
-            "Document": bot.send_document,
-            "Video": bot.send_video,
-            "Audio": bot.send_audio,
-            "Photo": bot.send_photo,
-            "Voice": bot.send_voice,
-            "Animation": bot.send_animation,
-            "Sticker": bot.send_sticker,
+            "Document": user.send_document,
+            "Video": user.send_video,
+            "Audio": user.send_audio,
+            "Photo": user.send_photo,
+            "Voice": user.send_voice,
+            "Animation": user.send_animation,
+            "Sticker": user.send_sticker,
         }.get(msg_type)
 
-        if send_func:
-            await send_func(
-                chat_id=DB_CHANNEL,
-                file_name=os.path.basename(file_path) if msg_type == "Document" else None,
-                caption=msg.caption or "",
-                caption_entities=msg.caption_entities,
-                reply_markup=markup
-            )
+        if markup:
+            await bot.send_message(DB_CHANNEL, "ℹ️ This message contains buttons. See below.")
+            await bot.send_document(DB_CHANNEL, file_path, caption=msg.caption or "", caption_entities=msg.caption_entities, reply_markup=markup)
         else:
-            await smsg.edit("❌ Unsupported media type.")
-            return
+            if send_func:
+                await send_func(DB_CHANNEL, file_path, caption=msg.caption or "", caption_entities=msg.caption_entities)
+            else:
+                await smsg.edit("❌ Unsupported media type.")
+                return
     except Exception as e:
         await smsg.edit(f"❌ Upload error: {e}")
     else:
@@ -239,5 +239,3 @@ async def forward_message(m, chat_id, msg_id):
             pass
 
 bot.run()
-
-
