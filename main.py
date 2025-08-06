@@ -119,7 +119,7 @@ async def test_btn(_, m):
     markup = InlineKeyboardMarkup(
         [[InlineKeyboardButton("🔗 Google", url="https://google.com")]]
     )
-    await user.send_message(DB_CHANNEL, "Test button working?", reply_markup=markup)
+    await bot.send_message(DB_CHANNEL, "Test button working?", reply_markup=markup)
     await m.reply("✅ Sent.")
     
 @bot.on_message(filters.command("start"))
