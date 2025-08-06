@@ -157,11 +157,9 @@ async def forward_message(m, chat_id, msg_id):
                 text = msg.reply_to_message.text.strip()
             if msg.forward_from:
                 sender = f"{msg.forward_from.first_name} {msg.forward_from.last_name or ''}".strip()
-                text = f"💬 Forwarded from {sender}:
-\n{text}"
+                text = f"💬 Forwarded from {sender}:\n{text}"
             elif msg.forward_sender_name:
-                text = f"💬 Forwarded from {msg.forward_sender_name}:
-\n{text}"
+                text = f"💬 Forwarded from {msg.forward_sender_name}:\n{text}"
 
             if text:
                 await bot.send_message(DB_CHANNEL, text, entities=msg.entities, reply_markup=markup)
