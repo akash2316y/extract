@@ -124,8 +124,16 @@ async def test_btn(_, m):
     
 @bot.on_message(filters.command("start"))
 async def start(_, m):
-    await m.reply("<blockquote>👋 Send Telegram post links. I’ll fetch & upload them to your DB channel.</blockquote>")
-
+    keyboard = InlineKeyboardMarkup(
+        [
+            [InlineKeyboardButton("📢 Update Channel", url="https://t.me/YourUpdateChannel")]
+        ]
+    )
+    await m.reply(
+        "<blockquote>👋 Send Telegram post links. I’ll fetch & upload them to your DB channel.</blockquote>",
+        reply_markup=keyboard
+    )
+    
 @bot.on_message(filters.text)
 async def main(_, m):
     text = m.text.strip()
