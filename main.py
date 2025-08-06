@@ -23,7 +23,7 @@ DB_CHANNEL = int(getenv("DB_CHANNEL"))
 
 ANIMATION_FRAMES = [".", "..", "..."]
 
-# Initialize bot
+# Initialize bot and user sessions
 bot = Client("bot", api_id=API_ID, api_hash=API_HASH, bot_token=BOT_TOKEN)
 user = Client("user", api_id=API_ID, api_hash=API_HASH, session_string=STRING_SESSION) if STRING_SESSION else None
 if user:
@@ -92,10 +92,25 @@ def get_type(msg):
     if msg.text: return "Text", None, 0
     return None, None, 0
 
-# ✅ NEW: Button Extractor (Regenerate buttons manually)
+# ✅ Extract buttons & add callback_data
 def extract_buttons(msg):
-    return msg.reply_markup
-    
+    if not msg.reply_markup:
+        return None
+
+    keyboard = []
+    for row in msg.reply_markup.inline_keyboard:
+        new_row = []
+        for button in row:
+            text = button.text
+            if button.url:
+                new_row.append(InlineKeyboardButton(text=text, url=button.url))
+            else:
+                callback_data = button.callback_data or f"cb_{text.replace(' ', '_')[:50]}"
+                new_row.append(InlineKeyboardButton(text=text, callback_data=callback_data))
+        keyboard.append(new_row)
+
+    return InlineKeyboardMarkup(keyboard)
+
 @bot.on_message(filters.command("start"))
 async def start(_, m):
     await m.reply("<blockquote>👋 Send Telegram post links. I’ll fetch & upload them to your DB channel.</blockquote>")
@@ -201,7 +216,7 @@ async def forward_message(m, chat_id, msg_id):
     ))
 
     try:
-        # Use bot session to send the file with original markup
+        # Upload with bot session (to keep buttons/markup working)
         send_func = {
             "Document": bot.send_document,
             "Video": bot.send_video,
@@ -235,5 +250,9 @@ async def forward_message(m, chat_id, msg_id):
         except:
             pass
 
-bot.run()
+# ✅ Callback handler for button presses
+@bot.on_callback_query()
+async def handle_callback(bot, query):
+    await query.answer(f"🔘 You clicked: {query.data}", show_alert=False)
 
+bot.run()
