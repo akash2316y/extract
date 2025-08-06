@@ -213,16 +213,13 @@ async def send_media(client, msg, msg_type, filename, filesize, markup, m, capti
         }.get(msg_type)
 
         if send_func:
-            await send_func(
-                chat_id=DB_CHANNEL,
-                file_name=os.path.basename(file_path) if msg_type == "Document" else None,
-                caption=caption or msg.caption or "",
-                caption_entities=msg.caption_entities,
-                reply_markup=markup,
-                file_name=filename,
-                video_note=msg.video_note.file_id if msg.video_note else None,
-                thumb=msg.thumb.file_id if hasattr(msg, 'thumb') else None,
-                supports_streaming=True
+            await bot.send_document(
+                     chat_id=DB_CHANNEL,
+                     document=file_path,
+                     caption=caption_text,
+                     caption_entities=msg.caption_entities,
+                     reply_markup=markup,
+                     file_name=os.path.basename(file_path)
             )
         else:
             await smsg.edit("❌ Unsupported media type.")
