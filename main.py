@@ -1,3 +1,4 @@
+
 import pyrogram.utils
 pyrogram.utils.MIN_CHANNEL_ID = -1009147483647
 
@@ -23,7 +24,7 @@ DB_CHANNEL = int(getenv("DB_CHANNEL"))
 
 ANIMATION_FRAMES = [".", "..", "..."]
 
-# Initialize bot and user clients
+# Initialize bot
 bot = Client("bot", api_id=API_ID, api_hash=API_HASH, bot_token=BOT_TOKEN)
 user = Client("user", api_id=API_ID, api_hash=API_HASH, session_string=STRING_SESSION) if STRING_SESSION else None
 if user:
@@ -92,17 +93,10 @@ def get_type(msg):
     if msg.text: return "Text", None, 0
     return None, None, 0
 
+# ✅ NEW: Button Extractor (Regenerate buttons manually)
 def extract_buttons(msg):
-    if not msg.reply_markup:
-        return None
-    keyboard = []
-    for row in msg.reply_markup.inline_keyboard:
-        btn_row = []
-        for btn in row:
-            btn_row.append(InlineKeyboardButton(text=btn.text, url=btn.url if btn.url else None))
-        keyboard.append(btn_row)
-    return InlineKeyboardMarkup(keyboard)
-
+    return msg.reply_markup
+    
 @bot.on_message(filters.command("start"))
 async def start(_, m):
     await m.reply("<blockquote>👋 Send Telegram post links. I’ll fetch & upload them to your DB channel.</blockquote>")
@@ -141,30 +135,32 @@ async def forward_message(m, chat_id, msg_id):
 
     try:
         msg = await user.get_messages(chat_id, msg_id)
+        print(msg)
     except Exception as e:
         await m.reply(f"❌ Cannot fetch original message: {e}")
         return
 
     msg_type, filename, filesize = get_type(msg)
     markup = extract_buttons(msg)
+    print(markup)
+    
+    if msg_type == "Text" or not msg_type:
+        try:
+            text = (msg.text or msg.caption or "").strip()
+            if not text and msg.reply_to_message and msg.reply_to_message.text:
+                text = msg.reply_to_message.text.strip()
+            if msg.forward_from:
+                sender = f"{msg.forward_from.first_name} {msg.forward_from.last_name or ''}".strip()
+                text = f"💬 Forwarded from {sender}:\n\n{text}"
+            elif msg.forward_sender_name:
+                text = f"💬 Forwarded from {msg.forward_sender_name}:\n\n{text}"
 
-    if not markup:
-        # Send everything from user session if no buttons
-        await send_media(user, msg, msg_type, filename, filesize, markup, m)
-    else:
-        # Send media from bot, caption from user (for premium emojis)
-        caption_msg = await user.get_messages(chat_id, msg_id)
-        caption = caption_msg.caption or caption_msg.text or ""
+            if text:
+                await bot.send_message(DB_CHANNEL, text, entities=msg.entities, reply_markup=markup)
+        except:
+            pass
+        return
 
-        await send_media(bot, msg, msg_type, filename, filesize, markup, m, caption=caption)
-
-def get_media_file(msg):
-    return (
-        msg.document or msg.video or msg.audio or msg.voice or
-        msg.photo or msg.animation or msg.sticker
-    )
-
-async def send_media(client, msg, msg_type, filename, filesize, markup, m, caption=None):
     smsg = await m.reply("📥 Downloading...")
     downloaded = [0]
     start_time = time.time()
@@ -177,6 +173,7 @@ async def send_media(client, msg, msg_type, filename, filesize, markup, m, capti
     ))
 
     try:
+        msg = await user.get_messages(chat_id, msg_id)  # Refetch
         file_path = await user.download_media(msg, file_name="downloads/", progress=download_cb)
     except Exception as e:
         progress_task.cancel()
@@ -203,24 +200,21 @@ async def send_media(client, msg, msg_type, filename, filesize, markup, m, capti
 
     try:
         send_func = {
-            "Document": client.send_document,
-            "Video": client.send_video,
-            "Audio": client.send_audio,
-            "Photo": client.send_photo,
-            "Voice": client.send_voice,
-            "Animation": client.send_animation,
-            "Sticker": client.send_sticker,
+            "Document": user.send_document,
+            "Video": user.send_video,
+            "Audio": user.send_audio,
+            "Photo": user.send_photo,
+            "Voice": user.send_voice,
+            "Animation": user.send_animation,
+            "Sticker": user.send_sticker,
         }.get(msg_type)
 
         if send_func:
-            await bot.send_document(
-                     chat_id=DB_CHANNEL,
-                     document=file_path,
-                     caption=caption_text,
-                     caption_entities=msg.caption_entities,
-                     reply_markup=markup,
-                     file_name=os.path.basename(file_path)
-            )
+            await send_func(DB_CHANNEL, file_path,
+                            caption=msg.caption.html,
+                            #caption_entities=msg.caption_entities,
+                            reply_markup=msg.reply_markup,)
+                            #progress=upload_cb if msg_type != "Photo" else None)
         else:
             await smsg.edit("❌ Unsupported media type.")
             return
@@ -237,3 +231,4 @@ async def send_media(client, msg, msg_type, filename, filesize, markup, m, capti
             pass
 
 bot.run()
+
