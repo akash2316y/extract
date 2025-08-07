@@ -23,7 +23,7 @@ DB_CHANNEL = int(getenv("DB_CHANNEL"))
 
 ANIMATION_FRAMES = [".", "..", "..."]
 
-# Initialize bot and user sessions
+# Initialize bot
 bot = Client("bot", api_id=API_ID, api_hash=API_HASH, bot_token=BOT_TOKEN)
 user = Client("user", api_id=API_ID, api_hash=API_HASH, session_string=STRING_SESSION) if STRING_SESSION else None
 if user:
@@ -46,6 +46,8 @@ def time_formatter(ms):
 
 def progress_bar(current, total):
     try:
+        current = float(current)
+        total = float(total)
         percent = current * 100 / total if total else 0
         filled = int(percent // 10)
         bar = "▪️" * filled + "▫️" * (10 - filled)
@@ -92,25 +94,6 @@ def get_type(msg):
     if msg.text: return "Text", None, 0
     return None, None, 0
 
-# ✅ Extract buttons & add callback_data
-def extract_buttons(msg):
-    if not msg.reply_markup:
-        return None
-
-    keyboard = []
-    for row in msg.reply_markup.inline_keyboard:
-        new_row = []
-        for button in row:
-            text = button.text
-            if button.url:
-                new_row.append(InlineKeyboardButton(text=text, url=button.url))
-            else:
-                callback_data = button.callback_data or f"cb_{text.replace(' ', '_')[:50]}"
-                new_row.append(InlineKeyboardButton(text=text, callback_data=callback_data))
-        keyboard.append(new_row)
-
-    return InlineKeyboardMarkup(keyboard)
-
 @bot.on_message(filters.command("start"))
 async def start(_, m):
     await m.reply("<blockquote>👋 Send Telegram post links. I’ll fetch & upload them to your DB channel.</blockquote>")
@@ -136,11 +119,25 @@ async def main(_, m):
 
             for msg_id in range(from_id, to_id + 1):
                 try:
+                    msg = await (user.get_messages if user else bot.get_messages)(chat_id, msg_id)
                     await forward_message(m, chat_id, msg_id)
                 except Exception as e:
                     await m.reply(f"❌ Failed to process message {msg_id}: {e}")
         except Exception as e:
             await m.reply(f"❌ Error: {e}")
+
+
+def extract_buttons(msg):
+    buttons = []
+    if msg.reply_markup and msg.reply_markup.inline_keyboard:
+        for row in msg.reply_markup.inline_keyboard:
+            new_row = []
+            for btn in row:
+                if btn.url:
+                    new_row.append(InlineKeyboardButton(btn.text or "🔗 Link", url=btn.url))
+            if new_row:
+                buttons.append(new_row)
+    return InlineKeyboardMarkup(buttons) if buttons else None
 
 async def forward_message(m, chat_id, msg_id):
     if not user:
@@ -156,12 +153,13 @@ async def forward_message(m, chat_id, msg_id):
     msg_type, filename, filesize = get_type(msg)
     markup = extract_buttons(msg)
 
-    # For text-only messages
     if msg_type == "Text" or not msg_type:
         try:
-            text = (msg.text or msg.caption or "").strip()
+            text = (msg.text or "").strip()
             if not text and msg.reply_to_message and msg.reply_to_message.text:
                 text = msg.reply_to_message.text.strip()
+            if not text and msg.caption:
+                text = msg.caption.strip()
             if msg.forward_from:
                 sender = f"{msg.forward_from.first_name} {msg.forward_from.last_name or ''}".strip()
                 text = f"💬 Forwarded from {sender}:\n\n{text}"
@@ -169,14 +167,9 @@ async def forward_message(m, chat_id, msg_id):
                 text = f"💬 Forwarded from {msg.forward_sender_name}:\n\n{text}"
 
             if text:
-                await bot.send_message(
-                    DB_CHANNEL,
-                    text,
-                    entities=msg.entities,
-                    reply_markup=markup
-                )
-        except Exception as e:
-            await m.reply(f"❌ Failed to send text: {e}")
+                await user.send_message(DB_CHANNEL, text, entities=msg.entities, reply_markup=markup)
+        except:
+            pass
         return
 
     smsg = await m.reply("📥 Downloading...")
@@ -216,25 +209,22 @@ async def forward_message(m, chat_id, msg_id):
     ))
 
     try:
-        # Upload with bot session (to keep buttons/markup working)
         send_func = {
-            "Document": bot.send_document,
-            "Video": bot.send_video,
-            "Audio": bot.send_audio,
-            "Photo": bot.send_photo,
-            "Voice": bot.send_voice,
-            "Animation": bot.send_animation,
-            "Sticker": bot.send_sticker,
+            "Document": user.send_document,
+            "Video": user.send_video,
+            "Audio": user.send_audio,
+            "Photo": user.send_photo,
+            "Voice": user.send_voice,
+            "Animation": user.send_animation,
+            "Sticker": user.send_sticker,
         }.get(msg_type)
 
         if send_func:
-            await send_func(
-                DB_CHANNEL,
-                file_path,
-                caption=msg.caption or None,
-                caption_entities=msg.caption_entities,
-                reply_markup=markup
-            )
+            await send_func(DB_CHANNEL, file_path,
+                            caption=msg.caption,
+                            caption_entities=msg.caption_entities,
+                            reply_markup=markup,
+                            progress=upload_cb if msg_type != "Photo" else None)
         else:
             await smsg.edit("❌ Unsupported media type.")
             return
@@ -249,10 +239,5 @@ async def forward_message(m, chat_id, msg_id):
             os.remove(file_path)
         except:
             pass
-
-# ✅ Callback handler for button presses
-@bot.on_callback_query()
-async def handle_callback(bot, query):
-    await query.answer(f"🔘 You clicked: {query.data}", show_alert=False)
 
 bot.run()
