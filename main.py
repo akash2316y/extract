@@ -23,7 +23,7 @@ DB_CHANNEL = int(getenv("DB_CHANNEL"))
 
 ANIMATION_FRAMES = [".", "..", "..."]
 
-# Initialize bot
+# Initialize bot & user
 bot = Client("bot", api_id=API_ID, api_hash=API_HASH, bot_token=BOT_TOKEN)
 user = Client("user", api_id=API_ID, api_hash=API_HASH, session_string=STRING_SESSION) if STRING_SESSION else None
 if user:
@@ -96,11 +96,13 @@ def get_type(msg):
 
 @bot.on_message(filters.command("start"))
 async def start(_, m):
-    await m.reply("<blockquote>👋 Send Telegram post links. I’ll fetch & upload them to your DB channel.</blockquote>")
+    await m.reply("👋 Send Telegram post links (t.me/c/ or t.me/b/). I’ll fetch & upload them to your DB channel.")
 
 @bot.on_message(filters.text)
 async def main(_, m):
     text = m.text.strip()
+
+    # Join channel/group via invite link
     if ("t.me/+" in text or "joinchat/" in text) and user:
         try:
             await user.join_chat(text)
@@ -109,6 +111,30 @@ async def main(_, m):
             await m.reply(f"❌ Couldn't join: {e}")
         return
 
+    # Handle https://t.me/b/username/msgid
+    if "https://t.me/b/" in text:
+        try:
+            parts = text.split("/")
+            username = parts[4]  # after /b/
+            msgid = int(parts[5]) if len(parts) > 5 else None
+
+            if not user:
+                await m.reply("❌ String Session is not Set")
+                return
+
+            if not msgid:
+                await m.reply("❌ Message ID not found in link")
+                return
+
+            try:
+                await forward_message(m, username, msgid)
+            except Exception as e:
+                await m.reply(f"❌ Error fetching: {e}")
+        except Exception as e:
+            await m.reply(f"❌ Error: {e}")
+        return
+
+    # Handle https://t.me/c/.../<msgid or range>
     if "https://t.me/" in text:
         try:
             parts = text.split("/")
@@ -119,13 +145,11 @@ async def main(_, m):
 
             for msg_id in range(from_id, to_id + 1):
                 try:
-                    msg = await (user.get_messages if user else bot.get_messages)(chat_id, msg_id)
                     await forward_message(m, chat_id, msg_id)
                 except Exception as e:
                     await m.reply(f"❌ Failed to process message {msg_id}: {e}")
         except Exception as e:
             await m.reply(f"❌ Error: {e}")
-
 
 def extract_buttons(msg):
     buttons = []
@@ -155,17 +179,7 @@ async def forward_message(m, chat_id, msg_id):
 
     if msg_type == "Text" or not msg_type:
         try:
-            text = (msg.text or "").strip()
-            if not text and msg.reply_to_message and msg.reply_to_message.text:
-                text = msg.reply_to_message.text.strip()
-            if not text and msg.caption:
-                text = msg.caption.strip()
-            if msg.forward_from:
-                sender = f"{msg.forward_from.first_name} {msg.forward_from.last_name or ''}".strip()
-                text = f"💬 Forwarded from {sender}:\n\n{text}"
-            elif msg.forward_sender_name:
-                text = f"💬 Forwarded from {msg.forward_sender_name}:\n\n{text}"
-
+            text = (msg.text or "").strip() or msg.caption or ""
             if text:
                 await user.send_message(DB_CHANNEL, text, entities=msg.entities, reply_markup=markup)
         except:
@@ -232,7 +246,6 @@ async def forward_message(m, chat_id, msg_id):
         await smsg.edit(f"❌ Upload error: {e}")
     else:
         await smsg.delete()
-        await asyncio.sleep(5)
     finally:
         upload_task.cancel()
         try:
