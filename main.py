@@ -23,12 +23,13 @@ DB_CHANNEL = int(getenv("DB_CHANNEL"))
 
 ANIMATION_FRAMES = [".", "..", "..."]
 
-# Initialize bot & user
+# Initialize bot and user session
 bot = Client("bot", api_id=API_ID, api_hash=API_HASH, bot_token=BOT_TOKEN)
 user = Client("user", api_id=API_ID, api_hash=API_HASH, session_string=STRING_SESSION) if STRING_SESSION else None
 if user:
     user.start()
 
+# Utility Functions
 def humanbytes(size):
     power = 2**10
     n = 0
@@ -94,63 +95,7 @@ def get_type(msg):
     if msg.text: return "Text", None, 0
     return None, None, 0
 
-@bot.on_message(filters.command("start"))
-async def start(_, m):
-    await m.reply("👋 Send Telegram post links (t.me/c/ or t.me/b/). I’ll fetch & upload them to your DB channel.")
-
-@bot.on_message(filters.text)
-async def main(_, m):
-    text = m.text.strip()
-
-    # Join channel/group via invite link
-    if ("t.me/+" in text or "joinchat/" in text) and user:
-        try:
-            await user.join_chat(text)
-            await m.reply("✅ Joined the group/channel.")
-        except Exception as e:
-            await m.reply(f"❌ Couldn't join: {e}")
-        return
-
-    # Handle https://t.me/b/username/msgid
-    if "https://t.me/b/" in text:
-        try:
-            parts = text.split("/")
-            username = parts[4]  # after /b/
-            msgid = int(parts[5]) if len(parts) > 5 else None
-
-            if not user:
-                await m.reply("❌ String Session is not Set")
-                return
-
-            if not msgid:
-                await m.reply("❌ Message ID not found in link")
-                return
-
-            try:
-                await forward_message(m, username, msgid)
-            except Exception as e:
-                await m.reply(f"❌ Error fetching: {e}")
-        except Exception as e:
-            await m.reply(f"❌ Error: {e}")
-        return
-
-    # Handle https://t.me/c/.../<msgid or range>
-    if "https://t.me/" in text:
-        try:
-            parts = text.split("/")
-            temp = parts[-1].replace("?single", "").split("-")
-            from_id = int(temp[0])
-            to_id = int(temp[1]) if len(temp) > 1 else from_id
-            chat_id = int("-100" + parts[4]) if "t.me/c/" in text else parts[3]
-
-            for msg_id in range(from_id, to_id + 1):
-                try:
-                    await forward_message(m, chat_id, msg_id)
-                except Exception as e:
-                    await m.reply(f"❌ Failed to process message {msg_id}: {e}")
-        except Exception as e:
-            await m.reply(f"❌ Error: {e}")
-
+# Extract inline buttons
 def extract_buttons(msg):
     buttons = []
     if msg.reply_markup and msg.reply_markup.inline_keyboard:
@@ -163,6 +108,64 @@ def extract_buttons(msg):
                 buttons.append(new_row)
     return InlineKeyboardMarkup(buttons) if buttons else None
 
+# Handle /start
+@bot.on_message(filters.command("start"))
+async def start(_, m):
+    await m.reply("<blockquote>👋 Send Telegram post links. I’ll fetch & upload them to your DB channel.</blockquote>")
+
+# Handle all text messages
+@bot.on_message(filters.text)
+async def main(_, m):
+    text = m.text.strip()
+
+    # auto join group/channel
+    if ("t.me/+" in text or "joinchat/" in text) and user:
+        try:
+            await user.join_chat(text)
+            await m.reply("✅ Joined the group/channel.")
+        except Exception as e:
+            await m.reply(f"❌ Couldn't join: {e}")
+        return
+
+    # handle normal telegram links
+    if "https://t.me/" in text:
+        try:
+            parts = text.split("/")
+            temp = parts[-1].replace("?single", "").split("-")
+            from_id = int(temp[0])
+            to_id = int(temp[1]) if len(temp) > 1 else from_id
+
+            # private group links (/c/)
+            if "t.me/c/" in text:
+                chat_id = int(f"-100{parts[4]}")
+            
+            # custom b/ links
+            elif "t.me/b/" in text:
+                username = parts[4]
+                if not user:
+                    await m.reply("❌ String session is not set.")
+                    return
+                try:
+                    await handle_private(m, username, from_id)
+                except Exception as e:
+                    await m.reply(f"❌ Error: {e}")
+                return
+            
+            # public username links
+            else:
+                chat_id = parts[3]
+
+            # fetch messages in range
+            for msg_id in range(from_id, to_id + 1):
+                try:
+                    msg = await (user.get_messages if user else bot.get_messages)(chat_id, msg_id)
+                    await forward_message(m, chat_id, msg_id)
+                except Exception as e:
+                    await m.reply(f"❌ Failed to process message {msg_id}: {e}")
+        except Exception as e:
+            await m.reply(f"❌ Error: {e}")
+
+# Forward message handler
 async def forward_message(m, chat_id, msg_id):
     if not user:
         await m.reply("❌ User session required.")
@@ -179,7 +182,17 @@ async def forward_message(m, chat_id, msg_id):
 
     if msg_type == "Text" or not msg_type:
         try:
-            text = (msg.text or "").strip() or msg.caption or ""
+            text = (msg.text or "").strip()
+            if not text and msg.reply_to_message and msg.reply_to_message.text:
+                text = msg.reply_to_message.text.strip()
+            if not text and msg.caption:
+                text = msg.caption.strip()
+            if msg.forward_from:
+                sender = f"{msg.forward_from.first_name} {msg.forward_from.last_name or ''}".strip()
+                text = f"💬 Forwarded from {sender}:\n\n{text}"
+            elif msg.forward_sender_name:
+                text = f"💬 Forwarded from {msg.forward_sender_name}:\n\n{text}"
+
             if text:
                 await user.send_message(DB_CHANNEL, text, entities=msg.entities, reply_markup=markup)
         except:
@@ -198,7 +211,7 @@ async def forward_message(m, chat_id, msg_id):
     ))
 
     try:
-        file_path = await user.download_media(msg, file_name="downloads/", progress=download_cb)
+        file_path = await user.download_media(msg, file_name=f"downloads/{msg_id}", progress=download_cb)
     except Exception as e:
         progress_task.cancel()
         await smsg.edit(f"❌ Download error: {e}")
@@ -246,11 +259,20 @@ async def forward_message(m, chat_id, msg_id):
         await smsg.edit(f"❌ Upload error: {e}")
     else:
         await smsg.delete()
+        await asyncio.sleep(5)
     finally:
         upload_task.cancel()
         try:
             os.remove(file_path)
         except:
             pass
+
+# Dummy handle_private (you can edit logic as per your need)
+async def handle_private(message, username, msgid):
+    try:
+        msg = await user.get_messages(username, msgid)
+        await forward_message(message, username, msgid)
+    except Exception as e:
+        await message.reply(f"❌ handle_private error: {e}")
 
 bot.run()
