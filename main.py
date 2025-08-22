@@ -216,28 +216,34 @@ async def forward_message(m, chat_id, msg_id):
     ))
 
     try:
-        # Upload with bot session (to keep buttons/markup working)
-        send_func = {
-            "Document": bot.send_document,
-            "Video": bot.send_video,
-            "Audio": bot.send_audio,
-            "Photo": bot.send_photo,
-            "Voice": bot.send_voice,
-            "Animation": bot.send_animation,
-            "Sticker": bot.send_sticker,
-        }.get(msg_type)
-
-        if send_func:
-            await send_func(
+        if msg_type == "Sticker":
+            # Stickers don't support caption
+            await bot.send_sticker(
                 DB_CHANNEL,
                 file_path,
-                caption=msg.caption or None,
-                caption_entities=msg.caption_entities,
                 reply_markup=markup
             )
         else:
-            await smsg.edit("❌ Unsupported media type.")
-            return
+            send_func = {
+                "Document": bot.send_document,
+                "Video": bot.send_video,
+                "Audio": bot.send_audio,
+                "Photo": bot.send_photo,
+                "Voice": bot.send_voice,
+                "Animation": bot.send_animation,
+            }.get(msg_type)
+
+            if send_func:
+                await send_func(
+                    DB_CHANNEL,
+                    file_path,
+                    caption=msg.caption or None,
+                    caption_entities=msg.caption_entities,
+                    reply_markup=markup
+                )
+            else:
+                await smsg.edit("❌ Unsupported media type.")
+                return
     except Exception as e:
         await smsg.edit(f"❌ Upload error: {e}")
     else:
