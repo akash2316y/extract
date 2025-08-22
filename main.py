@@ -119,74 +119,7 @@ def extract_buttons(msg):
 async def start(_, m):
     await m.reply("<blockquote>👋 Send Telegram post links. I’ll fetch & upload them to your DB channel.</blockquote>")
 
-# ✅ /quote command (text + media support)
-# ✅ /quote command (text + media support + debug print)
-@bot.on_message(filters.command("quote") & filters.reply)
-async def quote_cmd(_, m):
-    if not user:
-        await m.reply("❌ User session required.")
-        return
 
-    try:
-        target = m.reply_to_message
-        print("\n===== /quote triggered =====")
-        print(f"User: {m.from_user.id} | Chat: {m.chat.id}")
-        print(f"Target message id: {target.id}")
-
-        text = target.text or target.caption
-        entities = target.entities or target.caption_entities
-        markup = extract_buttons(target)
-
-        print(f"Text/Caption found: {text}")
-        print(f"Entities: {entities}")
-        print(f"Has Markup: {bool(markup)}")
-
-        # --- Text only ---
-        if target.text and not (target.photo or target.video or target.document or target.audio or target.voice or target.animation or target.sticker):
-            print("Message type: TEXT")
-            await user.send_message(
-                m.chat.id,
-                text,
-                entities=entities,
-                reply_markup=markup
-            )
-            print("✅ Text quoted successfully.")
-            await m.reply("✅ Quoted text successfully.", quote=True)
-            return
-
-        # --- Media cases ---
-        if target.photo:
-            print("Message type: PHOTO")
-            await user.send_photo(m.chat.id, target.photo.file_id, caption=text, caption_entities=entities, reply_markup=markup)
-        elif target.video:
-            print("Message type: VIDEO")
-            await user.send_video(m.chat.id, target.video.file_id, caption=text, caption_entities=entities, reply_markup=markup)
-        elif target.document:
-            print("Message type: DOCUMENT")
-            await user.send_document(m.chat.id, target.document.file_id, caption=text, caption_entities=entities, reply_markup=markup)
-        elif target.audio:
-            print("Message type: AUDIO")
-            await user.send_audio(m.chat.id, target.audio.file_id, caption=text, caption_entities=entities, reply_markup=markup)
-        elif target.voice:
-            print("Message type: VOICE")
-            await user.send_voice(m.chat.id, target.voice.file_id, caption=text, caption_entities=entities, reply_markup=markup)
-        elif target.animation:
-            print("Message type: ANIMATION")
-            await user.send_animation(m.chat.id, target.animation.file_id, caption=text, caption_entities=entities, reply_markup=markup)
-        elif target.sticker:
-            print("Message type: STICKER")
-            await user.send_sticker(m.chat.id, target.sticker.file_id, reply_markup=markup)
-        else:
-            print("⚠️ Unsupported media type.")
-            await m.reply("⚠️ यह media type अभी supported नहीं है।")
-            return
-
-        print("✅ Media quoted successfully.")
-        await m.reply("✅ Quoted media successfully.", quote=True)
-
-    except Exception as e:
-        print(f"❌ ERROR in /quote: {e}")
-        await m.reply(f"❌ Quote error: {e}")
 
 
 # --- Main Forwarding Logic (same as before) ---
@@ -340,4 +273,77 @@ async def forward_message(m, chat_id, msg_id):
 async def handle_callback(bot, query):
     await query.answer(f"🔘 You clicked: {query.data}", show_alert=False)
 
+def get_message_type(target):
+    """Return message type string based on content."""
+    if target.text and not (target.photo or target.video or target.document or target.audio or target.voice or target.animation or target.sticker):
+        return "TEXT"
+    if target.photo:
+        return "PHOTO"
+    if target.video:
+        return "VIDEO"
+    if target.document:
+        return "DOCUMENT"
+    if target.audio:
+        return "AUDIO"
+    if target.voice:
+        return "VOICE"
+    if target.animation:
+        return "ANIMATION"
+    if target.sticker:
+        return "STICKER"
+    return "UNKNOWN"
+
+
+async def send_message(user, chat_id, target, text, entities=None, markup=None):
+    """Send message using user session based on type."""
+    msg_type = get_message_type(target)
+    if msg_type == "TEXT":
+        await user.send_message(chat_id=chat_id, text=text, entities=entities, reply_markup=markup)
+    elif msg_type == "PHOTO":
+        await user.send_photo(chat_id, target.photo.file_id, caption=text, caption_entities=entities, reply_markup=markup)
+    elif msg_type == "VIDEO":
+        await user.send_video(chat_id, target.video.file_id, caption=text, caption_entities=entities, reply_markup=markup)
+    elif msg_type == "DOCUMENT":
+        await user.send_document(chat_id, target.document.file_id, caption=text, caption_entities=entities, reply_markup=markup)
+    elif msg_type == "AUDIO":
+        await user.send_audio(chat_id, target.audio.file_id, caption=text, caption_entities=entities, reply_markup=markup)
+    elif msg_type == "VOICE":
+        await user.send_voice(chat_id, target.voice.file_id, caption=text, caption_entities=entities, reply_markup=markup)
+    elif msg_type == "ANIMATION":
+        await user.send_animation(chat_id, target.animation.file_id, caption=text, caption_entities=entities, reply_markup=markup)
+    elif msg_type == "STICKER":
+        await user.send_sticker(chat_id, target.sticker.file_id, reply_markup=markup)
+    else:
+        raise ValueError("Unsupported media type")
+    return msg_type
+
+
+@bot.on_message(filters.command("quote") & filters.reply)
+async def quote_cmd(_, m):
+    if not user:
+        await m.reply("❌ User session required.")
+        return
+
+    try:
+        target = m.reply_to_message
+        print("\n===== /quote triggered =====")
+        print(f"User: {m.from_user.id} | Chat: {m.chat.id}")
+        print(f"Target message id: {target.id}")
+
+        text = target.text or target.caption
+        entities = target.entities or target.caption_entities
+        markup = extract_buttons(target)
+
+        print(f"Text/Caption found: {text}")
+        print(f"Entities: {entities}")
+        print(f"Has Markup: {bool(markup)}")
+
+        msg_type = await send_message(user, m.chat.id, target, text, entities, markup)
+        print(f"✅ {msg_type} quoted successfully.")
+        await m.reply(f"✅ Quoted {msg_type.lower()} successfully.", quote=True)
+
+    except Exception as e:
+        print(f"❌ ERROR in /quote: {e}")
+        await m.reply(f"❌ Quote error: {e}")
+        
 bot.run()
