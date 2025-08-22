@@ -29,6 +29,7 @@ user = Client("user", api_id=API_ID, api_hash=API_HASH, session_string=STRING_SE
 if user:
     user.start()
 
+# --- Helpers ---
 def humanbytes(size):
     power = 2**10
     n = 0
@@ -96,7 +97,7 @@ def get_type(msg):
     if msg.text: return "Text", None, 0
     return None, None, 0
 
-# ✅ Extract buttons & add callback_data
+# ✅ Extract buttons
 def extract_buttons(msg):
     if not msg.reply_markup:
         return None
@@ -113,10 +114,60 @@ def extract_buttons(msg):
         keyboard.append(new_row)
     return InlineKeyboardMarkup(keyboard)
 
+# --- Commands ---
 @bot.on_message(filters.command("start"))
 async def start(_, m):
     await m.reply("<blockquote>👋 Send Telegram post links. I’ll fetch & upload them to your DB channel.</blockquote>")
 
+# ✅ /quote command (text + media support)
+@bot.on_message(filters.command("quote") & filters.reply)
+async def quote_cmd(_, m):
+    if not user:
+        await m.reply("❌ User session required.")
+        return
+    
+    try:
+        target = m.reply_to_message
+        text = target.text or target.caption
+        entities = target.entities or target.caption_entities
+        markup = extract_buttons(target)
+
+        # --- Text only ---
+        if target.text and not (target.photo or target.video or target.document or target.audio or target.voice or target.animation or target.sticker):
+            await user.send_message(
+                m.chat.id,
+                text,
+                entities=entities,
+                reply_markup=markup
+            )
+            await m.reply("✅ Quoted text successfully.", quote=True)
+            return
+
+        # --- Media cases ---
+        if target.photo:
+            await user.send_photo(m.chat.id, target.photo.file_id, caption=text, caption_entities=entities, reply_markup=markup)
+        elif target.video:
+            await user.send_video(m.chat.id, target.video.file_id, caption=text, caption_entities=entities, reply_markup=markup)
+        elif target.document:
+            await user.send_document(m.chat.id, target.document.file_id, caption=text, caption_entities=entities, reply_markup=markup)
+        elif target.audio:
+            await user.send_audio(m.chat.id, target.audio.file_id, caption=text, caption_entities=entities, reply_markup=markup)
+        elif target.voice:
+            await user.send_voice(m.chat.id, target.voice.file_id, caption=text, caption_entities=entities, reply_markup=markup)
+        elif target.animation:
+            await user.send_animation(m.chat.id, target.animation.file_id, caption=text, caption_entities=entities, reply_markup=markup)
+        elif target.sticker:
+            await user.send_sticker(m.chat.id, target.sticker.file_id, reply_markup=markup)
+        else:
+            await m.reply("⚠️ यह media type अभी supported नहीं है।")
+            return
+
+        await m.reply("✅ Quoted media successfully.", quote=True)
+
+    except Exception as e:
+        await m.reply(f"❌ Quote error: {e}")
+
+# --- Main Forwarding Logic (same as before) ---
 @bot.on_message(filters.text)
 async def main(_, m):
     text = m.text.strip()
@@ -144,6 +195,7 @@ async def main(_, m):
         except Exception as e:
             await m.reply(f"❌ Error: {e}")
 
+# --- Forwarder ---
 async def forward_message(m, chat_id, msg_id):
     if not user:
         await m.reply("❌ User session required.")
@@ -158,31 +210,27 @@ async def forward_message(m, chat_id, msg_id):
     msg_type, filename, filesize = get_type(msg)
     markup = extract_buttons(msg)
 
-    # Text-only messages (with QUOTE support ✅)
+    # Text-only messages
     if msg_type == "Text" or not msg_type:
         try:
-            text = (msg.text or msg.caption or "").strip()
-
-            # ✅ Add quoted text if available
+            text = msg.text or msg.caption or ""
             if msg.reply_to_message:
                 quoted = msg.reply_to_message.text or msg.reply_to_message.caption
                 if quoted:
                     text = f"<blockquote>{quoted}</blockquote>\n\n{text}"
 
-            # Forward info
             if msg.forward_from:
                 sender = f"{msg.forward_from.first_name} {msg.forward_from.last_name or ''}".strip()
                 text = f"💬 Forwarded from {sender}:\n\n{text}"
             elif msg.forward_sender_name:
                 text = f"💬 Forwarded from {msg.forward_sender_name}:\n\n{text}"
 
-            if text:
-                await bot.send_message(
-                    DB_CHANNEL,
-                    text,
-                    entities=msg.entities,
-                    reply_markup=markup
-                )
+            await bot.send_message(
+                DB_CHANNEL,
+                text,
+                entities=msg.entities or msg.caption_entities,
+                reply_markup=markup
+            )
         except Exception as e:
             await m.reply(f"❌ Failed to send text: {e}")
         return
@@ -190,16 +238,12 @@ async def forward_message(m, chat_id, msg_id):
     # Stickers
     if msg_type == "Sticker" and getattr(msg, "sticker", None):
         try:
-            await bot.send_sticker(
-                DB_CHANNEL,
-                msg.sticker.file_id,
-                reply_markup=markup
-            )
+            await bot.send_sticker(DB_CHANNEL, msg.sticker.file_id, reply_markup=markup)
             return
         except Exception:
             pass
 
-    # Media (download + upload)
+    # Media (download + upload flow same as before)
     smsg = await m.reply("📥 Downloading...")
     downloaded = [0]
     start_time = time.time()
@@ -237,33 +281,26 @@ async def forward_message(m, chat_id, msg_id):
     ))
 
     try:
-        if msg_type == "Sticker":
-            await bot.send_sticker(
+        send_func = {
+            "Document": bot.send_document,
+            "Video": bot.send_video,
+            "Audio": bot.send_audio,
+            "Photo": bot.send_photo,
+            "Voice": bot.send_voice,
+            "Animation": bot.send_animation,
+        }.get(msg_type)
+
+        if send_func:
+            await send_func(
                 DB_CHANNEL,
                 file_path,
+                caption=(msg.caption or None),
+                caption_entities=getattr(msg, "caption_entities", None),
                 reply_markup=markup
             )
         else:
-            send_func = {
-                "Document": bot.send_document,
-                "Video": bot.send_video,
-                "Audio": bot.send_audio,
-                "Photo": bot.send_photo,
-                "Voice": bot.send_voice,
-                "Animation": bot.send_animation,
-            }.get(msg_type)
-
-            if send_func:
-                await send_func(
-                    DB_CHANNEL,
-                    file_path,
-                    caption=(msg.caption or None),
-                    caption_entities=getattr(msg, "caption_entities", None),
-                    reply_markup=markup
-                )
-            else:
-                await smsg.edit("❌ Unsupported media type.")
-                return
+            await smsg.edit("❌ Unsupported media type.")
+            return
     except Exception as e:
         await smsg.edit(f"❌ Upload error: {e}")
     else:
