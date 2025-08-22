@@ -82,13 +82,18 @@ ETA: {time_formatter(eta * 1000)}"""
         await asyncio.sleep(3)
 
 def get_type(msg):
-    if msg.document: return "Document", msg.document.file_name, msg.document.file_size
+    if msg.document: return "Document", (msg.document.file_name or "file"), msg.document.file_size or 0
     if msg.video: return "Video", msg.video.file_name, msg.video.file_size
     if msg.audio: return "Audio", msg.audio.file_name, msg.audio.file_size
     if msg.voice: return "Voice", "voice.ogg", msg.voice.file_size
     if msg.photo: return "Photo", "photo.jpg", 0
     if msg.animation: return "Animation", msg.animation.file_name, msg.animation.file_size
-    if msg.sticker: return "Sticker", "sticker.webp", 0
+    if msg.sticker: 
+        # Filename just for progress text; real send will use file_id
+        fn = "sticker.webp"
+        if getattr(msg.sticker, "is_animated", False): fn = "sticker.tgs"
+        if getattr(msg.sticker, "is_video", False): fn = "sticker.webm"
+        return "Sticker", fn, 0
     if msg.text: return "Text", None, 0
     return None, None, 0
 
@@ -96,7 +101,6 @@ def get_type(msg):
 def extract_buttons(msg):
     if not msg.reply_markup:
         return None
-
     keyboard = []
     for row in msg.reply_markup.inline_keyboard:
         new_row = []
@@ -108,7 +112,6 @@ def extract_buttons(msg):
                 callback_data = button.callback_data or f"cb_{text.replace(' ', '_')[:50]}"
                 new_row.append(InlineKeyboardButton(text=text, callback_data=callback_data))
         keyboard.append(new_row)
-
     return InlineKeyboardMarkup(keyboard)
 
 @bot.on_message(filters.command("start"))
@@ -156,7 +159,7 @@ async def forward_message(m, chat_id, msg_id):
     msg_type, filename, filesize = get_type(msg)
     markup = extract_buttons(msg)
 
-    # For text-only messages
+    # Text-only messages
     if msg_type == "Text" or not msg_type:
         try:
             text = (msg.text or msg.caption or "").strip()
@@ -179,6 +182,20 @@ async def forward_message(m, chat_id, msg_id):
             await m.reply(f"❌ Failed to send text: {e}")
         return
 
+    # 🔒 SPECIAL CASE: Stickers -> send by file_id to force sticker type (WEBP/TGS/WEBM)
+    if msg_type == "Sticker" and getattr(msg, "sticker", None):
+        try:
+            await bot.send_sticker(
+                DB_CHANNEL,
+                msg.sticker.file_id,
+                reply_markup=markup
+            )
+            return
+        except Exception:
+            # Fall back to download + send_sticker
+            pass
+
+    # For other media (or sticker fallback): download -> upload
     smsg = await m.reply("📥 Downloading...")
     downloaded = [0]
     start_time = time.time()
@@ -237,8 +254,8 @@ async def forward_message(m, chat_id, msg_id):
                 await send_func(
                     DB_CHANNEL,
                     file_path,
-                    caption=msg.caption or None,
-                    caption_entities=msg.caption_entities,
+                    caption=(msg.caption or None),
+                    caption_entities=getattr(msg, "caption_entities", None),
                     reply_markup=markup
                 )
             else:
