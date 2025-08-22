@@ -1,71 +1,149 @@
-import os
-import time
+import pyrogram.utils
+pyrogram.utils.MIN_CHANNEL_ID = -1009147483647
+
+from pyrogram import Client, filters
+from pyrogram.types import InlineKeyboardMarkup, InlineKeyboardButton
 import asyncio
-from pyrogram import Client
-from pyrogram.types import InlineKeyboardMarkup
-from pyrogram.errors import FloodWait
+import os
+import json
+import time
 
-# --- CONFIG ---
-API_ID = int(os.environ.get("API_ID"))
-API_HASH = os.environ.get("API_HASH")
-BOT_TOKEN = os.environ.get("BOT_TOKEN")
-SESSION_STRING = os.environ.get("SESSION_STRING")
-DB_CHANNEL = int(os.environ.get("DB_CHANNEL"))
+# Load config
+with open('config.json', 'r') as f:
+    DATA = json.load(f)
 
-bot = Client("forward-bot", api_id=API_ID, api_hash=API_HASH, bot_token=BOT_TOKEN)
-user = Client("user", api_id=API_ID, api_hash=API_HASH, session_string=SESSION_STRING)
+def getenv(var):
+    return os.environ.get(var) or DATA.get(var)
 
+API_ID = int(getenv("ID"))
+API_HASH = getenv("HASH")
+BOT_TOKEN = getenv("TOKEN")
+STRING_SESSION = getenv("STRING")
+DB_CHANNEL = int(getenv("DB_CHANNEL"))
 
-# --- HELPERS ---
-def get_type(msg):
-    if msg.text:
-        return "Text", None, None
-    if msg.sticker:
-        return "Sticker", None, None
-    if msg.document:
-        return "Document", msg.document.file_name, msg.document.file_size
-    if msg.video:
-        return "Video", msg.video.file_name, msg.video.file_size
-    if msg.audio:
-        return "Audio", msg.audio.file_name, msg.audio.file_size
-    if msg.photo:
-        return "Photo", None, None
-    if msg.voice:
-        return "Voice", None, None
-    if msg.animation:
-        return "Animation", None, None
-    return None, None, None
+ANIMATION_FRAMES = [".", "..", "..."]
 
+# Initialize bot and user sessions
+bot = Client("bot", api_id=API_ID, api_hash=API_HASH, bot_token=BOT_TOKEN)
+user = Client("user", api_id=API_ID, api_hash=API_HASH, session_string=STRING_SESSION) if STRING_SESSION else None
+if user:
+    user.start()
 
-def extract_buttons(msg):
-    if msg.reply_markup and isinstance(msg.reply_markup, InlineKeyboardMarkup):
-        return msg.reply_markup
-    return None
+def humanbytes(size):
+    power = 2**10
+    n = 0
+    units = ["B", "KiB", "MiB", "GiB", "TiB"]
+    while size >= power and n < len(units) - 1:
+        size /= power
+        n += 1
+    return f"{size:.2f} {units[n]}"
 
+def time_formatter(ms):
+    seconds = int(ms / 1000)
+    minutes, seconds = divmod(seconds, 60)
+    hours, minutes = divmod(minutes, 60)
+    return f"{hours}h {minutes}m" if hours else f"{minutes}m {seconds}s" if minutes else f"{seconds}s"
 
-async def update_progress(message, current_fn, total, start_time, action, filename):
+def progress_bar(current, total):
+    try:
+        percent = current * 100 / total if total else 0
+        filled = int(percent // 10)
+        bar = "▪️" * filled + "▫️" * (10 - filled)
+        return bar, percent
+    except:
+        return "▫️" * 10, 0
+
+async def update_progress(message, current_func, total, start, status, filename="File", anim=[0]):
     while True:
-        current = current_fn()
-        now = time.time()
-        elapsed = now - start_time
-        speed = current / elapsed if elapsed > 0 else 0
-        percent = (current / total) * 100 if total else 0
-        eta = (total - current) / speed if speed > 0 else 0
+        current = current_func()
+        bar, percent = progress_bar(current, total)
+        elapsed = time.time() - start
+        speed = current / elapsed if elapsed else 0
+        eta = (total - current) / speed if speed else 0
+        dots = ANIMATION_FRAMES[anim[0] % len(ANIMATION_FRAMES)]
+
+        text = f"""{status} {dots}
+
+📄 **{filename}**
+[{bar}]
+Progress: {percent:.2f}%
+Size: {humanbytes(current)} of {humanbytes(total)}
+Speed: {humanbytes(speed)}/s
+ETA: {time_formatter(eta * 1000)}"""
+
         try:
-            await message.edit(
-                f"{action} `{filename}`\n"
-                f"Progress: {percent:.1f}%\n"
-                f"Speed: {speed/1024:.2f} KB/s\n"
-                f"ETA: {int(eta)}s"
-            )
-        except FloodWait as e:
-            await asyncio.sleep(e.value)
-        except Exception:
+            await message.edit_text(text)
+        except:
             pass
-        await asyncio.sleep(2)
 
+        if current >= total:
+            break
+        anim[0] += 1
+        await asyncio.sleep(3)
 
-# --- MAIN FORWARD FUNCTION ---
+def get_type(msg):
+    if msg.document: return "Document", (msg.document.file_name or "file"), msg.document.file_size or 0
+    if msg.video: return "Video", msg.video.file_name, msg.video.file_size
+    if msg.audio: return "Audio", msg.audio.file_name, msg.audio.file_size
+    if msg.voice: return "Voice", "voice.ogg", msg.voice.file_size
+    if msg.photo: return "Photo", "photo.jpg", 0
+    if msg.animation: return "Animation", msg.animation.file_name, msg.animation.file_size
+    if msg.sticker: 
+        fn = "sticker.webp"
+        if getattr(msg.sticker, "is_animated", False): fn = "sticker.tgs"
+        if getattr(msg.sticker, "is_video", False): fn = "sticker.webm"
+        return "Sticker", fn, 0
+    if msg.text: return "Text", None, 0
+    return None, None, 0
+
+# ✅ Extract buttons & add callback_data
+def extract_buttons(msg):
+    if not msg.reply_markup:
+        return None
+    keyboard = []
+    for row in msg.reply_markup.inline_keyboard:
+        new_row = []
+        for button in row:
+            text = button.text
+            if button.url:
+                new_row.append(InlineKeyboardButton(text=text, url=button.url))
+            else:
+                callback_data = button.callback_data or f"cb_{text.replace(' ', '_')[:50]}"
+                new_row.append(InlineKeyboardButton(text=text, callback_data=callback_data))
+        keyboard.append(new_row)
+    return InlineKeyboardMarkup(keyboard)
+
+@bot.on_message(filters.command("start"))
+async def start(_, m):
+    await m.reply("<blockquote>👋 Send Telegram post links. I’ll fetch & upload them to your DB channel.</blockquote>")
+
+@bot.on_message(filters.text)
+async def main(_, m):
+    text = m.text.strip()
+    if ("t.me/+" in text or "joinchat/" in text) and user:
+        try:
+            await user.join_chat(text)
+            await m.reply("✅ Joined the group/channel.")
+        except Exception as e:
+            await m.reply(f"❌ Couldn't join: {e}")
+        return
+
+    if "https://t.me/" in text:
+        try:
+            parts = text.split("/")
+            temp = parts[-1].replace("?single", "").split("-")
+            from_id = int(temp[0])
+            to_id = int(temp[1]) if len(temp) > 1 else from_id
+            chat_id = int("-100" + parts[4]) if "t.me/c/" in text else parts[3]
+
+            for msg_id in range(from_id, to_id + 1):
+                try:
+                    await forward_message(m, chat_id, msg_id)
+                except Exception as e:
+                    await m.reply(f"❌ Failed to process message {msg_id}: {e}")
+        except Exception as e:
+            await m.reply(f"❌ Error: {e}")
+
 async def forward_message(m, chat_id, msg_id):
     if not user:
         await m.reply("❌ User session required.")
@@ -80,67 +158,48 @@ async def forward_message(m, chat_id, msg_id):
     msg_type, filename, filesize = get_type(msg)
     markup = extract_buttons(msg)
 
-    # ✅ Handle quoted/replied-to message
-    reply_to = None
-    if msg.reply_to_message:
-        r_msg = msg.reply_to_message
-        r_type, r_filename, _ = get_type(r_msg)
-
+    # Text-only messages (with QUOTE support ✅)
+    if msg_type == "Text" or not msg_type:
         try:
-            if r_type == "Text" or not r_type:
-                reply_to = await bot.send_message(
+            text = (msg.text or msg.caption or "").strip()
+
+            # ✅ Add quoted text if available
+            if msg.reply_to_message:
+                quoted = msg.reply_to_message.text or msg.reply_to_message.caption
+                if quoted:
+                    text = f"<blockquote>{quoted}</blockquote>\n\n{text}"
+
+            # Forward info
+            if msg.forward_from:
+                sender = f"{msg.forward_from.first_name} {msg.forward_from.last_name or ''}".strip()
+                text = f"💬 Forwarded from {sender}:\n\n{text}"
+            elif msg.forward_sender_name:
+                text = f"💬 Forwarded from {msg.forward_sender_name}:\n\n{text}"
+
+            if text:
+                await bot.send_message(
                     DB_CHANNEL,
-                    (r_msg.text or r_msg.caption or "❌ Empty quote"),
-                    entities=r_msg.entities,
+                    text,
+                    entities=msg.entities,
+                    reply_markup=markup
                 )
-            elif r_type == "Sticker" and getattr(r_msg, "sticker", None):
-                reply_to = await bot.send_sticker(DB_CHANNEL, r_msg.sticker.file_id)
-            else:
-                fpath = await user.download_media(r_msg, file_name="downloads/")
-                send_func = {
-                    "Document": bot.send_document,
-                    "Video": bot.send_video,
-                    "Audio": bot.send_audio,
-                    "Photo": bot.send_photo,
-                    "Voice": bot.send_voice,
-                    "Animation": bot.send_animation,
-                }.get(r_type)
-                if send_func:
-                    reply_to = await send_func(DB_CHANNEL, fpath, caption=r_msg.caption)
-                os.remove(fpath)
+        except Exception as e:
+            await m.reply(f"❌ Failed to send text: {e}")
+        return
+
+    # Stickers
+    if msg_type == "Sticker" and getattr(msg, "sticker", None):
+        try:
+            await bot.send_sticker(
+                DB_CHANNEL,
+                msg.sticker.file_id,
+                reply_markup=markup
+            )
+            return
         except Exception:
             pass
 
-    # ✅ Handle Text
-    if msg_type == "Text" or not msg_type:
-        text = (msg.text or msg.caption or "").strip()
-        if msg.forward_from:
-            sender = f"{msg.forward_from.first_name} {msg.forward_from.last_name or ''}".strip()
-            text = f"💬 Forwarded from {sender}:\n\n{text}"
-        elif msg.forward_sender_name:
-            text = f"💬 Forwarded from {msg.forward_sender_name}:\n\n{text}"
-
-        if text:
-            await bot.send_message(
-                DB_CHANNEL,
-                text,
-                entities=msg.entities,
-                reply_markup=markup,
-                reply_to_message_id=reply_to.id if reply_to else None
-            )
-        return
-
-    # ✅ Handle Stickers
-    if msg_type == "Sticker" and getattr(msg, "sticker", None):
-        await bot.send_sticker(
-            DB_CHANNEL,
-            msg.sticker.file_id,
-            reply_markup=markup,
-            reply_to_message_id=reply_to.id if reply_to else None
-        )
-        return
-
-    # ✅ Handle Media (download + upload with progress)
+    # Media (download + upload)
     smsg = await m.reply("📥 Downloading...")
     downloaded = [0]
     start_time = time.time()
@@ -159,7 +218,9 @@ async def forward_message(m, chat_id, msg_id):
         await smsg.edit(f"❌ Download error: {e}")
         return
 
+    downloaded[0] = os.path.getsize(file_path) if os.path.exists(file_path) else 0
     progress_task.cancel()
+
     if not file_path:
         await smsg.edit("❌ Download failed.")
         return
@@ -176,34 +237,48 @@ async def forward_message(m, chat_id, msg_id):
     ))
 
     try:
-        send_func = {
-            "Document": bot.send_document,
-            "Video": bot.send_video,
-            "Audio": bot.send_audio,
-            "Photo": bot.send_photo,
-            "Voice": bot.send_voice,
-            "Animation": bot.send_animation,
-        }.get(msg_type)
-
-        if send_func:
-            await send_func(
+        if msg_type == "Sticker":
+            await bot.send_sticker(
                 DB_CHANNEL,
                 file_path,
-                caption=(msg.caption or None),
-                caption_entities=getattr(msg, "caption_entities", None),
-                reply_markup=markup,
-                reply_to_message_id=reply_to.id if reply_to else None
+                reply_markup=markup
             )
         else:
-            await smsg.edit("❌ Unsupported media type.")
-            return
+            send_func = {
+                "Document": bot.send_document,
+                "Video": bot.send_video,
+                "Audio": bot.send_audio,
+                "Photo": bot.send_photo,
+                "Voice": bot.send_voice,
+                "Animation": bot.send_animation,
+            }.get(msg_type)
+
+            if send_func:
+                await send_func(
+                    DB_CHANNEL,
+                    file_path,
+                    caption=(msg.caption or None),
+                    caption_entities=getattr(msg, "caption_entities", None),
+                    reply_markup=markup
+                )
+            else:
+                await smsg.edit("❌ Unsupported media type.")
+                return
     except Exception as e:
         await smsg.edit(f"❌ Upload error: {e}")
     else:
         await smsg.delete()
+        await asyncio.sleep(5)
     finally:
         upload_task.cancel()
         try:
             os.remove(file_path)
         except:
             pass
+
+# ✅ Callback handler
+@bot.on_callback_query()
+async def handle_callback(bot, query):
+    await query.answer(f"🔘 You clicked: {query.data}", show_alert=False)
+
+bot.run()
